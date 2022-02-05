@@ -270,29 +270,67 @@ static void apply_container_state(struct sway_container *container,
 
 	memcpy(&container->current, state, sizeof(struct sway_container_state));
 
-	wlr_scene_node_set_enabled(&container->background.title_bar->node, container->current.border_top);
-	wlr_scene_node_set_enabled(&container->background.bottom->node, container->current.border_bottom);
-	wlr_scene_node_set_enabled(&container->background.left->node, container->current.border_left);
-	wlr_scene_node_set_enabled(&container->background.right->node, container->current.border_right);
+	wlr_scene_node_set_enabled(container->title_bar.node, container->current.border_top);
+	wlr_scene_node_set_enabled(&container->border.bottom->node, container->current.border_bottom);
+	wlr_scene_node_set_enabled(&container->border.left->node, container->current.border_left);
+	wlr_scene_node_set_enabled(&container->border.right->node, container->current.border_right);
 
 	int title_bar_height = container->current.title_bar_height;
 	int border_width = container->current.border_thickness;
-	wlr_scene_rect_set_size(container->background.title_bar,
+	enum alignment title_align = config->title_align;
+	int titlebar_border_thickness = config->titlebar_border_thickness;
+
+	wlr_scene_rect_set_size(container->title_bar.border,
 		container->current.width, title_bar_height);
-	wlr_scene_rect_set_size(container->background.bottom,
+	wlr_scene_rect_set_size(container->title_bar.background,
+		container->current.width - titlebar_border_thickness * 2,
+		title_bar_height - titlebar_border_thickness * 2);
+	wlr_scene_rect_set_size(container->border.bottom,
 		container->current.width, border_width);
-	wlr_scene_rect_set_size(container->background.left,
+	wlr_scene_rect_set_size(container->border.left,
 		border_width, container->current.height - border_width - title_bar_height);
-	wlr_scene_rect_set_size(container->background.right,
+	wlr_scene_rect_set_size(container->border.right,
 		border_width, container->current.height - border_width - title_bar_height);
 
-	wlr_scene_node_set_position(&container->background.title_bar->node, 0, 0);
-	wlr_scene_node_set_position(&container->background.bottom->node, 0,
+	wlr_scene_node_set_position(&container->title_bar.background->node,
+		titlebar_border_thickness, titlebar_border_thickness);
+	wlr_scene_node_set_position(&container->border.bottom->node, 0,
 		container->current.content_height + title_bar_height);
-	wlr_scene_node_set_position(&container->background.left->node, 0, title_bar_height);
-	wlr_scene_node_set_position(&container->background.right->node,
+	wlr_scene_node_set_position(&container->border.left->node, 0, title_bar_height);
+	wlr_scene_node_set_position(&container->border.right->node,
 		container->current.content_width + border_width, title_bar_height);
 
+	int marks_buffer_width = 0;
+	if (container->title_bar.marks_buffer) {
+		int height;
+		wlr_scene_node_get_size(container->title_bar.marks_buffer, &marks_buffer_width, &height);
+
+		int h_padding;
+		if (title_align == ALIGN_RIGHT) {
+			h_padding = config->titlebar_h_padding;
+		}else{
+			h_padding = container->current.width - config->titlebar_h_padding - marks_buffer_width;
+		}
+
+		wlr_scene_node_set_position(container->title_bar.marks_buffer, h_padding, (title_bar_height - height) >> 1);
+	}
+
+	if (container->title_bar.title_buffer) {
+		int width, height;
+		wlr_scene_node_get_size(container->title_bar.title_buffer, &width, &height);
+
+		int h_padding = 0;
+		if (title_align == ALIGN_LEFT) {
+			h_padding = config->titlebar_h_padding;
+		}else if (title_align == ALIGN_RIGHT) {
+			h_padding = container->current.width - config->titlebar_h_padding - width;
+		}else if (title_align == ALIGN_CENTER) {
+			h_padding = ((int) container->current.width - marks_buffer_width - width) >> 1;
+		}
+
+		wlr_scene_node_set_position(container->title_bar.title_buffer, h_padding, (title_bar_height - height) >> 1);
+	}
+	
 	if (view) {
 		if (!wl_list_empty(&view->saved_buffers)) {
 			if (!container->node.destroying || container->node.ntxnrefs == 1) {

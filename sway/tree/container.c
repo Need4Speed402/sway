@@ -87,10 +87,14 @@ struct sway_container *container_create(struct sway_view *view) {
 	c->view = view;
 	c->alpha = 1.0f;
 
-	c->background.title_bar = wlr_scene_rect_create(c->node.scene_node, 0, 0, (float[4]){0.f, 0.f, 0.f, 1} );
-	c->background.bottom = wlr_scene_rect_create(c->node.scene_node, 0, 0, (float[4]){0.f, 0.f, 0.f, 1} );
-	c->background.left = wlr_scene_rect_create(c->node.scene_node, 0, 0, (float[4]){0.f, 0.f, 0.f, 1} );
-	c->background.right = wlr_scene_rect_create(c->node.scene_node, 0, 0, (float[4]){0.f, 0.f, 0.f, 1} );
+	struct wlr_scene_tree *title_tree = wlr_scene_tree_create(c->node.scene_node);
+	c->title_bar.node = &title_tree->node;
+	c->title_bar.border = wlr_scene_rect_create(c->title_bar.node, 0, 0, (float[4]){0.f, 0.f, 0.f, 1} );
+	c->title_bar.background = wlr_scene_rect_create(c->title_bar.node, 0, 0, (float[4]){0.f, 0.f, 0.f, 1} );
+
+	c->border.bottom = wlr_scene_rect_create(c->node.scene_node, 0, 0, (float[4]){0.f, 0.f, 0.f, 1} );
+	c->border.left = wlr_scene_rect_create(c->node.scene_node, 0, 0, (float[4]){0.f, 0.f, 0.f, 1} );
+	c->border.right = wlr_scene_rect_create(c->node.scene_node, 0, 0, (float[4]){0.f, 0.f, 0.f, 1} );
 
 	if (!view) {
 		c->pending.children = create_list();
@@ -121,10 +125,11 @@ void container_set_focus_state(struct sway_container *con, enum sway_container_f
 		colors = &config->border_colors.urgent;
 	}
 
-	wlr_scene_rect_set_color(con->background.title_bar, (const float *) colors->child_border);
-	wlr_scene_rect_set_color(con->background.bottom, (const float *) colors->child_border);
-	wlr_scene_rect_set_color(con->background.left, (const float *) colors->child_border);
-	wlr_scene_rect_set_color(con->background.right, (const float *) colors->child_border);
+	wlr_scene_rect_set_color(con->title_bar.border, (const float *) colors->border);
+	wlr_scene_rect_set_color(con->title_bar.background, (const float *) colors->background);
+	wlr_scene_rect_set_color(con->border.bottom, (const float *) colors->child_border);
+	wlr_scene_rect_set_color(con->border.left, (const float *) colors->child_border);
+	wlr_scene_rect_set_color(con->border.right, (const float *) colors->child_border);
 	container_update_title_textures(con);
 }
 
@@ -614,15 +619,15 @@ static struct wlr_scene_node *create_text_scene_node (struct sway_output *output
 	unsigned char *data = cairo_image_surface_get_data(surface);
 	int stride = cairo_image_surface_get_stride(surface);
 
-	con->title_buffer = my_buffer_create(width, height);
-	memcpy(con->title_buffer->data, data, height * stride);
+	struct my_buffer *buffer = my_buffer_create(width, height);
+	memcpy(buffer->data, data, height * stride);
 
 	cairo_surface_destroy(surface);
 	g_object_unref(pango);
 	cairo_destroy(cairo);
 
-	struct wlr_scene_buffer *node = wlr_scene_buffer_create(con->node.scene_node, &con->title_buffer->base);
-	wlr_scene_buffer_set_dest_size(node, width, height);
+	struct wlr_scene_buffer *node = wlr_scene_buffer_create(con->title_bar.node, &buffer->base);
+	wlr_scene_buffer_set_dest_size(node, width / scale, height / scale);
 	return &node->node;
 }
 
@@ -646,15 +651,17 @@ void container_update_title_textures(struct sway_container *con) {
 		colors = &config->border_colors.urgent;
 	}
 
-	if (con->title_bar) {
-		wlr_scene_node_destroy(con->title_bar);
+	if (con->title_bar.title_buffer) {
+		wlr_scene_node_destroy(con->title_bar.title_buffer);
+		con->title_bar.title_buffer = NULL;
 	}
 
-	con->title_bar = create_text_scene_node(output, con, colors->text,
+	con->title_bar.title_buffer = create_text_scene_node(output, con, colors->text,
 		config->pango_markup, con->formatted_title);
 
-	if (con->marks_buffer) {
-		wlr_scene_node_destroy(con->marks_buffer);
+	if (con->title_bar.marks_buffer) {
+		wlr_scene_node_destroy(con->title_bar.marks_buffer);
+		con->title_bar.marks_buffer = NULL;
 	}
 
 	if (config->show_marks) {
@@ -682,7 +689,7 @@ void container_update_title_textures(struct sway_container *con) {
 		}
 		free(part);
 
-		con->marks_buffer = create_text_scene_node(output, con, colors->text,
+		con->title_bar.marks_buffer = create_text_scene_node(output, con, colors->text,
 			false, buffer);
 	}
 }

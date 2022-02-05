@@ -83,14 +83,22 @@ struct sway_container {
 	struct sway_node node;
 	struct sway_view *view;
 	
-	struct wlr_scene_node *title_bar;
-	struct wlr_scene_node *marks_buffer;
+
 	struct {
-		struct wlr_scene_rect *title_bar;
+		struct wlr_scene_node *node;
+
+		struct wlr_scene_rect *border;
+		struct wlr_scene_rect *background;
+
+		struct wlr_scene_node *title_buffer;
+		struct wlr_scene_node *marks_buffer;
+	} title_bar;
+
+	struct {
 		struct wlr_scene_rect *bottom;
 		struct wlr_scene_rect *left;
 		struct wlr_scene_rect *right;
-	} background;
+	} border;
 
 	struct sway_container_state current;
 	struct sway_container_state pending;
@@ -138,8 +146,6 @@ struct sway_container {
 	bool scratchpad;
 
 	float alpha;
-
-	struct my_buffer *title_buffer;
 
 	list_t *marks; // char *
 
