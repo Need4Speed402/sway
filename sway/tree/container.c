@@ -54,17 +54,20 @@ static const struct wlr_buffer_impl my_buffer_impl = {
 	.end_data_ptr_access = my_buffer_end_data_ptr_access,
 };
 
-static struct my_buffer *my_buffer_create(uint32_t width, uint32_t height) {
+static struct my_buffer *my_buffer_create(uint32_t width, uint32_t height, uint32_t scale) {
 	struct my_buffer *buffer = calloc(1, sizeof(*buffer));
 	if (buffer == NULL) {
 		return NULL;
 	}
 
-	wlr_buffer_init(&buffer->base, &my_buffer_impl, width, height);
+	wlr_buffer_init(&buffer->base, &my_buffer_impl, width * scale, height * scale);
 	buffer->format = DRM_FORMAT_ARGB8888;
-	buffer->stride = 4 * width;
+	buffer->stride = 4 * width * scale;
+	buffer->width = width;
+	buffer->height = height;
+	buffer->scale = scale;
 
-	buffer->data = malloc(buffer->stride * height);
+	buffer->data = malloc(buffer->stride * height * scale);
 	if (buffer->data == NULL) {
 		free(buffer);
 		return NULL;
@@ -559,7 +562,7 @@ struct sway_output *container_get_effective_output(struct sway_container *con) {
 	return con->outputs->items[con->outputs->length - 1];
 }
 
-static struct wlr_scene_node *create_text_scene_node (struct sway_output *output,
+static struct wlr_scene_buffer *create_text_scene_node (struct sway_output *output,
 		struct sway_container *con, const float *color,
 		bool pango_markup, char *text) {
 	double scale = output->wlr_output->scale;
@@ -619,7 +622,7 @@ static struct wlr_scene_node *create_text_scene_node (struct sway_output *output
 	unsigned char *data = cairo_image_surface_get_data(surface);
 	int stride = cairo_image_surface_get_stride(surface);
 
-	struct my_buffer *buffer = my_buffer_create(width, height);
+	struct my_buffer *buffer = my_buffer_create(width / scale, height / scale, scale);
 	memcpy(buffer->data, data, height * stride);
 
 	cairo_surface_destroy(surface);
@@ -628,7 +631,7 @@ static struct wlr_scene_node *create_text_scene_node (struct sway_output *output
 
 	struct wlr_scene_buffer *node = wlr_scene_buffer_create(con->title_bar.node, &buffer->base);
 	wlr_scene_buffer_set_dest_size(node, width / scale, height / scale);
-	return &node->node;
+	return node;
 }
 
 void container_update_title_textures(struct sway_container *con) {
@@ -652,7 +655,7 @@ void container_update_title_textures(struct sway_container *con) {
 	}
 
 	if (con->title_bar.title_buffer) {
-		wlr_scene_node_destroy(con->title_bar.title_buffer);
+		wlr_scene_node_destroy(&con->title_bar.title_buffer->node);
 		con->title_bar.title_buffer = NULL;
 	}
 
@@ -660,7 +663,7 @@ void container_update_title_textures(struct sway_container *con) {
 		config->pango_markup, con->formatted_title);
 
 	if (con->title_bar.marks_buffer) {
-		wlr_scene_node_destroy(con->title_bar.marks_buffer);
+		wlr_scene_node_destroy(&con->title_bar.marks_buffer->node);
 		con->title_bar.marks_buffer = NULL;
 	}
 

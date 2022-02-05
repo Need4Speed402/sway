@@ -77,6 +77,8 @@ struct my_buffer {
 	void *data;
 	uint32_t format;
 	size_t stride;
+
+	uint32_t width, height, scale;
 };
 
 struct sway_container {
@@ -90,8 +92,8 @@ struct sway_container {
 		struct wlr_scene_rect *border;
 		struct wlr_scene_rect *background;
 
-		struct wlr_scene_node *title_buffer;
-		struct wlr_scene_node *marks_buffer;
+		struct wlr_scene_buffer *title_buffer;
+		struct wlr_scene_buffer *marks_buffer;
 	} title_bar;
 
 	struct {

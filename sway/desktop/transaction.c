@@ -302,8 +302,8 @@ static void apply_container_state(struct sway_container *container,
 
 	int marks_buffer_width = 0;
 	if (container->title_bar.marks_buffer) {
-		int height;
-		wlr_scene_node_get_size(container->title_bar.marks_buffer, &marks_buffer_width, &height);
+		struct my_buffer *buffer = wl_container_of(container->title_bar.marks_buffer->buffer, buffer, base);
+		marks_buffer_width = buffer->width;
 
 		int h_padding;
 		if (title_align == ALIGN_RIGHT) {
@@ -312,23 +312,22 @@ static void apply_container_state(struct sway_container *container,
 			h_padding = container->current.width - config->titlebar_h_padding - marks_buffer_width;
 		}
 
-		wlr_scene_node_set_position(container->title_bar.marks_buffer, h_padding, (title_bar_height - height) >> 1);
+		wlr_scene_node_set_position(&container->title_bar.marks_buffer->node, h_padding, (title_bar_height - buffer->height) >> 1);
 	}
 
 	if (container->title_bar.title_buffer) {
-		int width, height;
-		wlr_scene_node_get_size(container->title_bar.title_buffer, &width, &height);
+		struct my_buffer *buffer = wl_container_of(container->title_bar.title_buffer->buffer, buffer, base);
 
-		int h_padding = 0;
-		if (title_align == ALIGN_LEFT) {
-			h_padding = config->titlebar_h_padding;
-		}else if (title_align == ALIGN_RIGHT) {
-			h_padding = container->current.width - config->titlebar_h_padding - width;
+		int h_padding;
+		if (title_align == ALIGN_RIGHT) {
+			h_padding = container->current.width - config->titlebar_h_padding - buffer->width;
 		}else if (title_align == ALIGN_CENTER) {
-			h_padding = ((int) container->current.width - marks_buffer_width - width) >> 1;
+			h_padding = ((int) container->current.width - marks_buffer_width - buffer->width) >> 1;
+		}else{
+			h_padding = config->titlebar_h_padding;
 		}
 
-		wlr_scene_node_set_position(container->title_bar.title_buffer, h_padding, (title_bar_height - height) >> 1);
+		wlr_scene_node_set_position(&container->title_bar.title_buffer->node, h_padding, (title_bar_height - buffer->height) >> 1);
 	}
 	
 	if (view) {
