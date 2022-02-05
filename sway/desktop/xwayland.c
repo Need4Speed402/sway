@@ -7,7 +7,6 @@
 #include <wlr/types/wlr_output.h>
 #include <wlr/xwayland.h>
 #include "log.h"
-#include "sway/desktop.h"
 #include "sway/desktop/transaction.h"
 #include "sway/input/cursor.h"
 #include "sway/input/input-manager.h"
@@ -43,12 +42,6 @@ static void unmanaged_handle_request_configure(struct wl_listener *listener,
 }
 
 static void unmanaged_handle_commit(struct wl_listener *listener, void *data) {
-	struct sway_xwayland_unmanaged *surface =
-		wl_container_of(listener, surface, commit);
-	struct wlr_xwayland_surface *xsurface = surface->wlr_xwayland_surface;
-
-	desktop_damage_surface(xsurface->surface, surface->lx, surface->ly,
-		false);
 }
 
 static void unmanaged_handle_set_geometry(struct wl_listener *listener, void *data) {
@@ -58,12 +51,8 @@ static void unmanaged_handle_set_geometry(struct wl_listener *listener, void *da
 
 	if (xsurface->x != surface->lx || xsurface->y != surface->ly) {
 		// Surface has moved
-		desktop_damage_surface(xsurface->surface, surface->lx, surface->ly,
-			true);
 		surface->lx = xsurface->x;
 		surface->ly = xsurface->y;
-		desktop_damage_surface(xsurface->surface, surface->lx, surface->ly,
-			true);
 	}
 }
 
@@ -82,7 +71,6 @@ static void unmanaged_handle_map(struct wl_listener *listener, void *data) {
 
 	surface->lx = xsurface->x;
 	surface->ly = xsurface->y;
-	desktop_damage_surface(xsurface->surface, surface->lx, surface->ly, true);
 
 	if (wlr_xwayland_or_surface_wants_focus(xsurface)) {
 		struct sway_seat *seat = input_manager_current_seat();
@@ -96,7 +84,6 @@ static void unmanaged_handle_unmap(struct wl_listener *listener, void *data) {
 	struct sway_xwayland_unmanaged *surface =
 		wl_container_of(listener, surface, unmap);
 	struct wlr_xwayland_surface *xsurface = surface->wlr_xwayland_surface;
-	desktop_damage_surface(xsurface->surface, xsurface->x, xsurface->y, true);
 	wl_list_remove(&surface->link);
 	wl_list_remove(&surface->set_geometry.link);
 	wl_list_remove(&surface->commit.link);
@@ -415,32 +402,12 @@ static void handle_commit(struct wl_listener *listener, void *data) {
 
 	struct wlr_box new_geo;
 	get_geometry(view, &new_geo);
-	bool new_size = new_geo.width != view->geometry.width ||
-			new_geo.height != view->geometry.height ||
-			new_geo.x != view->geometry.x ||
-			new_geo.y != view->geometry.y;
-
-	if (new_size) {
-		// The client changed its surface size in this commit. For floating
-		// containers, we resize the container to match. For tiling containers,
-		// we only recenter the surface.
-		desktop_damage_view(view);
-		memcpy(&view->geometry, &new_geo, sizeof(struct wlr_box));
-		if (container_is_floating(view->container)) {
-			view_update_size(view);
-			transaction_commit_dirty_client();
-		} else {
-			view_center_surface(view);
-		}
-		desktop_damage_view(view);
-	}
 
 	if (view->container->node.instruction) {
 		transaction_notify_view_ready_by_geometry(view,
 				xsurface->x, xsurface->y, state->width, state->height);
 	}
 
-	view_damage_from(view);
 }
 
 static void handle_destroy(struct wl_listener *listener, void *data) {
@@ -709,7 +676,7 @@ struct sway_xwayland_view *create_xwayland_view(struct wlr_xwayland_surface *xsu
 		return NULL;
 	}
 
-	view_init(&xwayland_view->view, SWAY_VIEW_XWAYLAND, &view_impl);
+	view_init(&xwayland_view->view, SWAY_VIEW_XWAYLAND, &view_impl, NULL);
 	xwayland_view->view.wlr_xwayland_surface = xsurface;
 
 	wl_signal_add(&xsurface->events.destroy, &xwayland_view->destroy);

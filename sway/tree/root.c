@@ -11,6 +11,7 @@
 #include "sway/tree/container.h"
 #include "sway/tree/root.h"
 #include "sway/tree/workspace.h"
+#include <wlr/types/wlr_scene.h>
 #include "list.h"
 #include "log.h"
 #include "util.h"
@@ -29,7 +30,12 @@ struct sway_root *root_create(void) {
 		sway_log(SWAY_ERROR, "Unable to allocate sway_root");
 		return NULL;
 	}
-	node_init(&root->node, N_ROOT, root);
+	root->root_scene = wlr_scene_create();
+	node_init(&root->node, &root->root_scene->node, N_ROOT, root);
+
+	root->staging = wlr_scene_tree_create(&root->root_scene->node);
+	wlr_scene_node_set_enabled(&root->staging->node, false);
+
 	root->output_layout = wlr_output_layout_create();
 	wl_list_init(&root->all_outputs);
 #if HAVE_XWAYLAND

@@ -5,7 +5,6 @@
 #include <time.h>
 #include <wlr/types/wlr_buffer.h>
 #include "sway/config.h"
-#include "sway/desktop.h"
 #include "sway/desktop/idle_inhibit_v1.h"
 #include "sway/desktop/transaction.h"
 #include "sway/input/cursor.h"
@@ -149,6 +148,7 @@ static void copy_container_state(struct sway_container *container,
 	if (!container->view) {
 		// We store a copy of the child list to avoid having it mutated after
 		// we copy the state.
+
 		state->children = create_list();
 		list_cat(state->children, container->pending.children);
 	} else {
@@ -156,7 +156,13 @@ static void copy_container_state(struct sway_container *container,
 	}
 
 	struct sway_seat *seat = input_manager_current_seat();
-	state->focused = seat_get_focus(seat) == &container->node;
+	if (seat_get_focus(seat) == &container->node) {
+		state->focus_state = FOCUS_FOCUSED;
+	}else if (state->focus_state == FOCUS_FOCUSED) {
+		state->focus_state = FOCUS_UNFOCUSED;
+	}
+
+	container_set_focus_state(container, state->focus_state);
 
 	if (!container->view) {
 		struct sway_node *focus =
@@ -214,39 +220,47 @@ static void transaction_add_node(struct sway_transaction *transaction,
 
 static void apply_output_state(struct sway_output *output,
 		struct sway_output_state *state) {
-	output_damage_whole(output);
 	list_free(output->current.workspaces);
 	memcpy(&output->current, state, sizeof(struct sway_output_state));
-	output_damage_whole(output);
+
+	for (int i = 0; i < output->current.workspaces->length; i++) {
+		struct sway_workspace *child = output->current.workspaces->items[i];
+
+		wlr_scene_node_set_enabled(child->node.scene_node,
+			output->current.active_workspace == child);
+		wlr_scene_node_reparent(child->node.scene_node, output->node.scene_node);
+	}
 }
 
 static void apply_workspace_state(struct sway_workspace *ws,
 		struct sway_workspace_state *state) {
-	output_damage_whole(ws->current.output);
 	list_free(ws->current.floating);
 	list_free(ws->current.tiling);
 	memcpy(&ws->current, state, sizeof(struct sway_workspace_state));
-	output_damage_whole(ws->current.output);
+
+	for (int i = 0; i < ws->current.tiling->length; i++) {
+		struct sway_container *child = ws->current.tiling->items[i];
+
+		wlr_scene_node_reparent(child->node.scene_node, ws->node.scene_node);
+
+		wlr_scene_node_set_position(child->node.scene_node,
+			child->pending.x - ws->current.x,
+			child->pending.y - ws->current.y);
+	}
+
+	for (int i = 0; i < ws->current.floating->length; i++) {
+		struct sway_container *child = ws->current.floating->items[i];
+
+		wlr_scene_node_reparent(child->node.scene_node, ws->node.scene_node);
+		wlr_scene_node_set_position(child->node.scene_node,
+			child->pending.x - ws->current.x,
+			child->pending.y - ws->current.y);
+	}
 }
 
 static void apply_container_state(struct sway_container *container,
 		struct sway_container_state *state) {
 	struct sway_view *view = container->view;
-	// Damage the old location
-	desktop_damage_whole_container(container);
-	if (view && !wl_list_empty(&view->saved_buffers)) {
-		struct sway_saved_buffer *saved_buf;
-		wl_list_for_each(saved_buf, &view->saved_buffers, link) {
-			struct wlr_box box = {
-				.x = saved_buf->x - view->saved_geometry.x,
-				.y = saved_buf->y - view->saved_geometry.y,
-				.width = saved_buf->width,
-				.height = saved_buf->height,
-			};
-			desktop_damage_box(&box);
-		}
-	}
-
 	// There are separate children lists for each instruction state, the
 	// container's current state and the container's pending state
 	// (ie. con->children). The list itself needs to be freed here.
@@ -256,30 +270,51 @@ static void apply_container_state(struct sway_container *container,
 
 	memcpy(&container->current, state, sizeof(struct sway_container_state));
 
-	if (view && !wl_list_empty(&view->saved_buffers)) {
-		if (!container->node.destroying || container->node.ntxnrefs == 1) {
-			view_remove_saved_buffer(view);
+	wlr_scene_node_set_enabled(&container->background.title_bar->node, container->current.border_top);
+	wlr_scene_node_set_enabled(&container->background.bottom->node, container->current.border_bottom);
+	wlr_scene_node_set_enabled(&container->background.left->node, container->current.border_left);
+	wlr_scene_node_set_enabled(&container->background.right->node, container->current.border_right);
+
+	int title_bar_height = container->current.title_bar_height;
+	int border_width = container->current.border_thickness;
+	wlr_scene_rect_set_size(container->background.title_bar,
+		container->current.width, title_bar_height);
+	wlr_scene_rect_set_size(container->background.bottom,
+		container->current.width, border_width);
+	wlr_scene_rect_set_size(container->background.left,
+		border_width, container->current.height - border_width - title_bar_height);
+	wlr_scene_rect_set_size(container->background.right,
+		border_width, container->current.height - border_width - title_bar_height);
+
+	wlr_scene_node_set_position(&container->background.title_bar->node, 0, 0);
+	wlr_scene_node_set_position(&container->background.bottom->node, 0,
+		container->current.content_height + title_bar_height);
+	wlr_scene_node_set_position(&container->background.left->node, 0, title_bar_height);
+	wlr_scene_node_set_position(&container->background.right->node,
+		container->current.content_width + border_width, title_bar_height);
+
+	if (view) {
+		if (!wl_list_empty(&view->saved_buffers)) {
+			if (!container->node.destroying || container->node.ntxnrefs == 1) {
+				view_remove_saved_buffer(view);
+			}
 		}
-	}
 
-	// If the view hasn't responded to the configure, center it within
-	// the container. This is important for fullscreen views which
-	// refuse to resize to the size of the output.
-	if (view && view->surface) {
-		view_center_surface(view);
-	}
+		// If the view hasn't responded to the configure, center it within
+		// the container. This is important for fullscreen views which
+		// refuse to resize to the size of the output.
+		if (view->surface) {
+			view_center_surface(view);
+		}
+	}else{
+		for (int i = 0; i < container->current.children->length; i++) {
+			struct sway_container *child = container->current.children->items[i];
 
-	// Damage the new location
-	desktop_damage_whole_container(container);
-	if (view && view->surface) {
-		struct wlr_surface *surface = view->surface;
-		struct wlr_box box = {
-			.x = container->current.content_x - view->geometry.x,
-			.y = container->current.content_y - view->geometry.y,
-			.width = surface->current.width,
-			.height = surface->current.height,
-		};
-		desktop_damage_box(&box);
+			wlr_scene_node_reparent(child->node.scene_node, container->node.scene_node);
+			wlr_scene_node_set_position(child->node.scene_node,
+				child->pending.x - container->current.x,
+				child->pending.y - container->current.y);
+		}
 	}
 
 	if (!container->node.destroying) {

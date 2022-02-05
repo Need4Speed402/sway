@@ -3,11 +3,19 @@
 #include <stdint.h>
 #include <sys/types.h>
 #include <wlr/types/wlr_compositor.h>
+#include <wlr/types/wlr_scene.h>
 #include "list.h"
 #include "sway/tree/node.h"
 
 struct sway_view;
 struct sway_seat;
+
+enum sway_container_focus_state {
+	FOCUS_FOCUSED,
+	FOCUS_UNFOCUSED,
+	FOCUS_URGENT,
+	FOCUS_CHILD_URGENT
+};
 
 enum sway_container_layout {
 	L_NONE,
@@ -44,16 +52,16 @@ struct sway_container_state {
 	double width, height;
 
 	enum sway_fullscreen_mode fullscreen_mode;
+	enum sway_container_focus_state focus_state;
 
 	struct sway_workspace *workspace; // NULL when hidden in the scratchpad
 	struct sway_container *parent;    // NULL if container in root of workspace
 	list_t *children;                 // struct sway_container
 
 	struct sway_container *focused_inactive_child;
-	bool focused;
 
 	enum sway_container_border border;
-	int border_thickness;
+	int border_thickness, title_bar_height;
 	bool border_top;
 	bool border_bottom;
 	bool border_left;
@@ -64,9 +72,25 @@ struct sway_container_state {
 	double content_width, content_height;
 };
 
+struct my_buffer {
+	struct wlr_buffer base;
+	void *data;
+	uint32_t format;
+	size_t stride;
+};
+
 struct sway_container {
 	struct sway_node node;
 	struct sway_view *view;
+	
+	struct wlr_scene_node *title_bar;
+	struct wlr_scene_node *marks_buffer;
+	struct {
+		struct wlr_scene_rect *title_bar;
+		struct wlr_scene_rect *bottom;
+		struct wlr_scene_rect *left;
+		struct wlr_scene_rect *right;
+	} background;
 
 	struct sway_container_state current;
 	struct sway_container_state pending;
@@ -115,18 +139,9 @@ struct sway_container {
 
 	float alpha;
 
-	struct wlr_texture *title_focused;
-	struct wlr_texture *title_focused_inactive;
-	struct wlr_texture *title_focused_tab_title;
-	struct wlr_texture *title_unfocused;
-	struct wlr_texture *title_urgent;
+	struct my_buffer *title_buffer;
 
 	list_t *marks; // char *
-	struct wlr_texture *marks_focused;
-	struct wlr_texture *marks_focused_inactive;
-	struct wlr_texture *marks_focused_tab_title;
-	struct wlr_texture *marks_unfocused;
-	struct wlr_texture *marks_urgent;
 
 	struct {
 		struct wl_signal destroy;
@@ -174,8 +189,6 @@ bool container_has_ancestor(struct sway_container *container,
 		struct sway_container *ancestor);
 
 void container_update_textures_recursive(struct sway_container *con);
-
-void container_damage_whole(struct sway_container *container);
 
 void container_reap_empty(struct sway_container *con);
 
@@ -348,8 +361,6 @@ bool container_has_mark(struct sway_container *container, char *mark);
 
 void container_add_mark(struct sway_container *container, char *mark);
 
-void container_update_marks_textures(struct sway_container *container);
-
 void container_raise_floating(struct sway_container *con);
 
 bool container_is_scratchpad_hidden(struct sway_container *con);
@@ -372,5 +383,7 @@ bool container_is_sticky_or_child(struct sway_container *con);
  * Returns the number of new containers added to the parent
  */
 int container_squash(struct sway_container *con);
+
+void container_set_focus_state(struct sway_container *con, enum sway_container_focus_state focus_state);
 
 #endif

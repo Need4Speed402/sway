@@ -16,7 +16,6 @@
 #include "list.h"
 #include "log.h"
 #include "sway/config.h"
-#include "sway/desktop.h"
 #include "sway/input/cursor.h"
 #include "sway/input/input-manager.h"
 #include "sway/input/keyboard.h"
@@ -361,16 +360,7 @@ static void handle_new_node(struct wl_listener *listener, void *data) {
 	seat_node_from_node(seat, node);
 }
 
-static void drag_icon_damage_whole(struct sway_drag_icon *icon) {
-	if (!icon->wlr_drag_icon->mapped) {
-		return;
-	}
-	desktop_damage_surface(icon->wlr_drag_icon->surface, icon->x, icon->y, true);
-}
-
 void drag_icon_update_position(struct sway_drag_icon *icon) {
-	drag_icon_damage_whole(icon);
-
 	struct wlr_drag_icon *wlr_icon = icon->wlr_drag_icon;
 	struct sway_seat *seat = icon->seat;
 	struct wlr_cursor *cursor = seat->cursor->cursor;
@@ -390,8 +380,6 @@ void drag_icon_update_position(struct sway_drag_icon *icon) {
 		icon->x = seat->touch_x;
 		icon->y = seat->touch_y;
 	}
-
-	drag_icon_damage_whole(icon);
 }
 
 static void drag_icon_handle_surface_commit(struct wl_listener *listener,
@@ -402,13 +390,9 @@ static void drag_icon_handle_surface_commit(struct wl_listener *listener,
 }
 
 static void drag_icon_handle_map(struct wl_listener *listener, void *data) {
-	struct sway_drag_icon *icon = wl_container_of(listener, icon, map);
-	drag_icon_damage_whole(icon);
 }
 
 static void drag_icon_handle_unmap(struct wl_listener *listener, void *data) {
-	struct sway_drag_icon *icon = wl_container_of(listener, icon, unmap);
-	drag_icon_damage_whole(icon);
 }
 
 static void drag_icon_handle_destroy(struct wl_listener *listener, void *data) {

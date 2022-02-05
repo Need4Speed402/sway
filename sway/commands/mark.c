@@ -59,7 +59,7 @@ struct cmd_results *cmd_mark(int argc, char **argv) {
 	}
 
 	free(mark);
-	container_update_marks_textures(container);
+	container_update_title_textures(container);
 	if (container->view) {
 		view_execute_criteria(container->view);
 	}

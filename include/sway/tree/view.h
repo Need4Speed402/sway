@@ -8,6 +8,7 @@
 #endif
 #include "sway/input/input-manager.h"
 #include "sway/input/seat.h"
+#include <wlr/types/wlr_scene.h>
 
 struct sway_container;
 struct sway_xdg_decoration;
@@ -69,6 +70,7 @@ struct sway_view {
 	enum sway_view_type type;
 	const struct sway_view_impl *impl;
 
+	struct wlr_scene_node *scene_node;
 	struct sway_container *container; // NULL if unmapped and transactions finished
 	struct wlr_surface *surface; // NULL for unmapped views
 	struct sway_xdg_decoration *xdg_decoration;
@@ -287,8 +289,6 @@ void view_close(struct sway_view *view);
 
 void view_close_popups(struct sway_view *view);
 
-void view_damage_from(struct sway_view *view);
-
 /**
  * Iterate all surfaces of a view (toplevels + popups).
  */
@@ -304,7 +304,7 @@ void view_for_each_popup_surface(struct sway_view *view,
 // view implementation
 
 void view_init(struct sway_view *view, enum sway_view_type type,
-	const struct sway_view_impl *impl);
+	const struct sway_view_impl *impl, struct wlr_xdg_surface *xdg_surface);
 
 void view_destroy(struct sway_view *view);
 

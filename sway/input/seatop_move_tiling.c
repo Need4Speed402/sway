@@ -2,7 +2,6 @@
 #include <limits.h>
 #include <wlr/types/wlr_cursor.h>
 #include <wlr/util/edges.h>
-#include "sway/desktop.h"
 #include "sway/desktop/transaction.h"
 #include "sway/input/cursor.h"
 #include "sway/input/seat.h"
@@ -33,6 +32,7 @@ struct seatop_move_tiling_event {
 
 static void handle_render(struct sway_seat *seat,
 		struct sway_output *output, pixman_region32_t *damage) {
+	/*
 	struct seatop_move_tiling_event *e = seat->seatop_data;
 	if (!e->threshold_reached) {
 		return;
@@ -47,6 +47,7 @@ static void handle_render(struct sway_seat *seat,
 		scale_box(&box, output->wlr_output->scale);
 		render_rect(output, damage, &box, color);
 	}
+	*/
 }
 
 static void handle_motion_prethreshold(struct sway_seat *seat) {
@@ -173,22 +174,11 @@ static void handle_motion_postthreshold(struct sway_seat *seat) {
 	struct sway_cursor *cursor = seat->cursor;
 	struct sway_node *node = node_at_coords(seat,
 			cursor->cursor->x, cursor->cursor->y, &surface, &sx, &sy);
-	// Damage the old location
-	desktop_damage_box(&e->drop_box);
 
 	if (!node) {
 		// Eg. hovered over a layer surface such as swaybar
 		e->target_node = NULL;
 		e->target_edge = WLR_EDGE_NONE;
-		return;
-	}
-
-	if (node->type == N_WORKSPACE) {
-		// Empty workspace
-		e->target_node = node;
-		e->target_edge = WLR_EDGE_NONE;
-		workspace_get_box(node->sway_workspace, &e->drop_box);
-		desktop_damage_box(&e->drop_box);
 		return;
 	}
 
@@ -257,7 +247,6 @@ static void handle_motion_postthreshold(struct sway_seat *seat) {
 			}
 			e->target_edge = edge;
 			e->drop_box = box;
-			desktop_damage_box(&e->drop_box);
 			return;
 		}
 		con = con->pending.parent;
@@ -304,7 +293,6 @@ static void handle_motion_postthreshold(struct sway_seat *seat) {
 	e->drop_box.width = con->pending.content_width;
 	e->drop_box.height = con->pending.content_height;
 	resize_box(&e->drop_box, e->target_edge, thickness);
-	desktop_damage_box(&e->drop_box);
 }
 
 static void handle_pointer_motion(struct sway_seat *seat, uint32_t time_msec) {

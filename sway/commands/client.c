@@ -6,7 +6,6 @@
 #include "util.h"
 
 static void rebuild_textures_iterator(struct sway_container *con, void *data) {
-	container_update_marks_textures(con);
 	container_update_title_textures(con);
 }
 
@@ -52,11 +51,6 @@ static struct cmd_results *handle_command(int argc, char **argv, char *cmd_name,
 
 	if (config->active) {
 		root_for_each_container(rebuild_textures_iterator, NULL);
-
-		for (int i = 0; i < root->outputs->length; ++i) {
-			struct sway_output *output = root->outputs->items[i];
-			output_damage_whole(output);
-		}
 	}
 
 	return cmd_results_new(CMD_SUCCESS, NULL);

@@ -7,7 +7,6 @@
 #include <wlr/util/edges.h>
 #include "log.h"
 #include "sway/decoration.h"
-#include "sway/desktop.h"
 #include "sway/desktop/transaction.h"
 #include "sway/input/cursor.h"
 #include "sway/input/input-manager.h"
@@ -278,39 +277,6 @@ static const struct sway_view_impl view_impl = {
 };
 
 static void handle_commit(struct wl_listener *listener, void *data) {
-	struct sway_xdg_shell_view *xdg_shell_view =
-		wl_container_of(listener, xdg_shell_view, commit);
-	struct sway_view *view = &xdg_shell_view->view;
-	struct wlr_xdg_surface *xdg_surface = view->wlr_xdg_surface;
-
-	struct wlr_box new_geo;
-	wlr_xdg_surface_get_geometry(xdg_surface, &new_geo);
-	bool new_size = new_geo.width != view->geometry.width ||
-			new_geo.height != view->geometry.height ||
-			new_geo.x != view->geometry.x ||
-			new_geo.y != view->geometry.y;
-
-	if (new_size) {
-		// The client changed its surface size in this commit. For floating
-		// containers, we resize the container to match. For tiling containers,
-		// we only recenter the surface.
-		desktop_damage_view(view);
-		memcpy(&view->geometry, &new_geo, sizeof(struct wlr_box));
-		if (container_is_floating(view->container)) {
-			view_update_size(view);
-			transaction_commit_dirty_client();
-		} else {
-			view_center_surface(view);
-		}
-		desktop_damage_view(view);
-	}
-
-	if (view->container->node.instruction) {
-		transaction_notify_view_ready_by_serial(view,
-				xdg_surface->current.configure_serial);
-	}
-
-	view_damage_from(view);
 }
 
 static void handle_set_title(struct wl_listener *listener, void *data) {
@@ -522,8 +488,7 @@ void handle_xdg_shell_surface(struct wl_listener *listener, void *data) {
 		return;
 	}
 
-	view_init(&xdg_shell_view->view, SWAY_VIEW_XDG_SHELL, &view_impl);
-	xdg_shell_view->view.wlr_xdg_surface = xdg_surface;
+	view_init(&xdg_shell_view->view, SWAY_VIEW_XDG_SHELL, &view_impl, xdg_surface);
 
 	xdg_shell_view->map.notify = handle_map;
 	wl_signal_add(&xdg_surface->events.map, &xdg_shell_view->map);

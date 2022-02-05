@@ -68,7 +68,9 @@ struct sway_workspace *workspace_create(struct sway_output *output,
 		sway_log(SWAY_ERROR, "Unable to allocate sway_workspace");
 		return NULL;
 	}
-	node_init(&ws->node, N_WORKSPACE, ws);
+
+	struct wlr_scene_tree *scene_tree = wlr_scene_tree_create(root->node.scene_node);
+	node_init(&ws->node, &scene_tree->node, N_WORKSPACE, ws);
 	ws->name = name ? strdup(name) : NULL;
 	ws->prev_split_layout = L_NONE;
 	ws->layout = output_get_default_layout(output);
@@ -684,7 +686,6 @@ void workspace_detect_urgent(struct sway_workspace *workspace) {
 	if (workspace->urgent != new_urgent) {
 		workspace->urgent = new_urgent;
 		ipc_event_workspace(NULL, workspace, "urgent");
-		output_damage_whole(workspace->output);
 	}
 }
 

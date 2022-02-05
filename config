@@ -1,0 +1,31 @@
+set $mod alt
+bindsym $mod+t exec foot
+bindsym $mod+e kill
+bindsym $mod+m exec ~/bfs/mako/build/mako
+bindsym $mod+f exec firefox
+bindsym $mod+c exec chromium
+bindsym $mod+alt+Delete exit
+bindsym $mod+y floating toggle
+bindsym $mod+a fullscreen toggle
+bindsym $mod+o move scratchpad
+bindsym $mod+shift+o scratchpad show
+bindsym $mod+w splith
+bindsym $mod+v splitv
+bindsym $mod+Escape kill
+
+bindsym $mod+0 workspace 0
+bindsym $mod+1 workspace 1
+bindsym $mod+2 workspace 2
+bindsym $mod+3 workspace 3
+bindsym $mod+4 workspace 4
+bindsym $mod+5 workspace 5
+bindsym $mod+6 workspace 6
+bindsym $mod+7 workspace 7
+bindsym $mod+8 workspace 8
+bindsym $mod+9 workspace 9
+
+floating_modifier $mod normal
+
+output * {
+	scale 1
+}

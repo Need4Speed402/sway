@@ -16,7 +16,6 @@
 #include "log.h"
 #include "sway/criteria.h"
 #include "sway/commands.h"
-#include "sway/desktop.h"
 #include "sway/desktop/transaction.h"
 #include "sway/desktop/idle_inhibit_v1.h"
 #include "sway/input/cursor.h"
@@ -34,7 +33,7 @@
 #include "stringop.h"
 
 void view_init(struct sway_view *view, enum sway_view_type type,
-		const struct sway_view_impl *impl) {
+		const struct sway_view_impl *impl, struct wlr_xdg_surface *xdg_surface) {
 	view->type = type;
 	view->impl = impl;
 	view->executed_criteria = create_list();
@@ -42,6 +41,9 @@ void view_init(struct sway_view *view, enum sway_view_type type,
 	view->allow_request_urgent = true;
 	view->shortcuts_inhibit = SHORTCUTS_INHIBIT_DEFAULT;
 	wl_signal_init(&view->events.unmap);
+
+	view->wlr_xdg_surface = xdg_surface;
+	view->scene_node = wlr_scene_xdg_surface_create(&root->staging->node, xdg_surface);
 }
 
 void view_destroy(struct sway_view *view) {
@@ -261,7 +263,7 @@ void view_autoconfigure(struct sway_view *view) {
 
 	con->pending.border_top = con->pending.border_bottom = true;
 	con->pending.border_left = con->pending.border_right = true;
-	double y_offset = 0;
+	int y_offset = 0;
 
 	if (!container_is_floating_or_child(con) && ws) {
 		if (config->hide_edge_borders == E_BOTH
@@ -309,19 +311,20 @@ void view_autoconfigure(struct sway_view *view) {
 		}
 	}
 
-	double x, y, width, height;
+	int x, y;
+	double width, height;
 	switch (con->pending.border) {
 	default:
 	case B_CSD:
 	case B_NONE:
-		x = con->pending.x;
-		y = con->pending.y + y_offset;
+		x = 0;
+		y = y_offset;
 		width = con->pending.width;
 		height = con->pending.height - y_offset;
 		break;
 	case B_PIXEL:
-		x = con->pending.x + con->pending.border_thickness * con->pending.border_left;
-		y = con->pending.y + con->pending.border_thickness * con->pending.border_top + y_offset;
+		x = con->pending.border_thickness * con->pending.border_left;
+		y = con->pending.border_thickness * con->pending.border_top + y_offset;
 		width = con->pending.width
 			- con->pending.border_thickness * con->pending.border_left
 			- con->pending.border_thickness * con->pending.border_right;
@@ -331,24 +334,28 @@ void view_autoconfigure(struct sway_view *view) {
 		break;
 	case B_NORMAL:
 		// Height is: 1px border + 3px pad + title height + 3px pad + 1px border
-		x = con->pending.x + con->pending.border_thickness * con->pending.border_left;
+		x = con->pending.border_thickness * con->pending.border_left;
 		width = con->pending.width
 			- con->pending.border_thickness * con->pending.border_left
 			- con->pending.border_thickness * con->pending.border_right;
 		if (y_offset) {
-			y = con->pending.y + y_offset;
+			y = y_offset;
 			height = con->pending.height - y_offset
 				- con->pending.border_thickness * con->pending.border_bottom;
 		} else {
-			y = con->pending.y + container_titlebar_height();
+			y = container_titlebar_height();
 			height = con->pending.height - container_titlebar_height()
 				- con->pending.border_thickness * con->pending.border_bottom;
 		}
 		break;
 	}
 
-	con->pending.content_x = x;
-	con->pending.content_y = y;
+
+	wlr_scene_node_set_position(view->scene_node, x, y);
+	con->pending.title_bar_height = y;
+
+	con->pending.content_x = x + con->pending.x;
+	con->pending.content_y = y + con->pending.y;
 	con->pending.content_width = width;
 	con->pending.content_height = height;
 }
@@ -430,13 +437,6 @@ void view_close(struct sway_view *view) {
 void view_close_popups(struct sway_view *view) {
 	if (view->impl->close_popups) {
 		view->impl->close_popups(view);
-	}
-}
-
-void view_damage_from(struct sway_view *view) {
-	for (int i = 0; i < root->outputs->length; ++i) {
-		struct sway_output *output = root->outputs->items[i];
-		output_damage_from_view(output, view);
 	}
 }
 
@@ -952,8 +952,6 @@ static void subsurface_handle_destroy(struct wl_listener *listener,
 	view_child_destroy(child);
 }
 
-static void view_child_damage(struct sway_view_child *child, bool whole);
-
 static void view_subsurface_create(struct sway_view *view,
 		struct wlr_subsurface *wlr_subsurface) {
 	struct sway_subsurface *subsurface =
@@ -969,8 +967,6 @@ static void view_subsurface_create(struct sway_view *view,
 	subsurface->destroy.notify = subsurface_handle_destroy;
 
 	subsurface->child.mapped = true;
-
-	view_child_damage(&subsurface->child, true);
 }
 
 static void view_child_subsurface_create(struct sway_view_child *child,
@@ -990,38 +986,10 @@ static void view_child_subsurface_create(struct sway_view_child *child,
 	subsurface->destroy.notify = subsurface_handle_destroy;
 
 	subsurface->child.mapped = true;
-
-	view_child_damage(&subsurface->child, true);
-}
-
-static bool view_child_is_mapped(struct sway_view_child *child) {
-	while (child) {
-		if (!child->mapped) {
-			return false;
-		}
-		child = child->parent;
-	}
-	return true;
-}
-
-static void view_child_damage(struct sway_view_child *child, bool whole) {
-	if (!child || !view_child_is_mapped(child) || !child->view || !child->view->container) {
-		return;
-	}
-	int sx, sy;
-	child->impl->get_view_coords(child, &sx, &sy);
-	desktop_damage_surface(child->surface,
-			child->view->container->pending.content_x -
-				child->view->geometry.x + sx,
-			child->view->container->pending.content_y -
-				child->view->geometry.y + sy, whole);
 }
 
 static void view_child_handle_surface_commit(struct wl_listener *listener,
 		void *data) {
-	struct sway_view_child *child =
-		wl_container_of(listener, child, surface_commit);
-	view_child_damage(child, false);
 }
 
 static void view_child_handle_surface_new_subsurface(
@@ -1070,14 +1038,12 @@ static void view_child_handle_surface_map(struct wl_listener *listener,
 	struct sway_view_child *child =
 		wl_container_of(listener, child, surface_map);
 	child->mapped = true;
-	view_child_damage(child, true);
 }
 
 static void view_child_handle_surface_unmap(struct wl_listener *listener,
 		void *data) {
 	struct sway_view_child *child =
 		wl_container_of(listener, child, surface_unmap);
-	view_child_damage(child, true);
 	child->mapped = false;
 }
 
@@ -1085,7 +1051,6 @@ static void view_child_handle_view_unmap(struct wl_listener *listener,
 		void *data) {
 	struct sway_view_child *child =
 		wl_container_of(listener, child, view_unmap);
-	view_child_damage(child, true);
 	child->mapped = false;
 }
 
@@ -1127,10 +1092,6 @@ void view_child_init(struct sway_view_child *child,
 }
 
 void view_child_destroy(struct sway_view_child *child) {
-	if (view_child_is_mapped(child) && child->view->container != NULL) {
-		view_child_damage(child, true);
-	}
-
 	if (child->parent != NULL) {
 		wl_list_remove(&child->link);
 		child->parent = NULL;
@@ -1365,6 +1326,7 @@ void view_set_urgent(struct sway_view *view, bool enable) {
 			return;
 		}
 		clock_gettime(CLOCK_MONOTONIC, &view->urgent);
+		container_set_focus_state(view->container, FOCUS_URGENT);
 	} else {
 		view->urgent = (struct timespec){ 0 };
 		if (view->urgent_timer) {
@@ -1372,7 +1334,6 @@ void view_set_urgent(struct sway_view *view, bool enable) {
 			view->urgent_timer = NULL;
 		}
 	}
-	container_damage_whole(view->container);
 
 	ipc_event_window(view->container, "urgent");
 

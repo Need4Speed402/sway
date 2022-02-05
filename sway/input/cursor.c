@@ -19,7 +19,6 @@
 #include "log.h"
 #include "util.h"
 #include "sway/commands.h"
-#include "sway/desktop.h"
 #include "sway/input/cursor.h"
 #include "sway/input/keyboard.h"
 #include "sway/input/tablet.h"

@@ -3,7 +3,8 @@
 #include <wayland-server-core.h>
 #include <wayland-util.h>
 #include <wlr/types/wlr_output_layout.h>
-#include <wlr/render/wlr_texture.h>
+#include <wlr/types/wlr_buffer.h>
+#include <wlr/types/wlr_scene.h>
 #include "sway/tree/container.h"
 #include "sway/tree/node.h"
 #include "config.h"
@@ -13,6 +14,14 @@ extern struct sway_root *root;
 
 struct sway_root {
 	struct sway_node node;
+	struct wlr_scene *root_scene;
+
+	// since wlr_scene nodes can't be orphaned and must always
+	// have a parent, use this staging scene_tree so that a
+	// node always have a valid parent. Nothing in this
+	// staging node will be visible.
+	struct wlr_scene_tree *staging;
+
 	struct wlr_output_layout *output_layout;
 
 	struct wl_listener output_layout_change;

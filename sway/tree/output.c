@@ -89,7 +89,9 @@ static void restore_workspaces(struct sway_output *output) {
 
 struct sway_output *output_create(struct wlr_output *wlr_output) {
 	struct sway_output *output = calloc(1, sizeof(struct sway_output));
-	node_init(&output->node, N_OUTPUT, output);
+
+	struct wlr_scene_tree *scene_tree = wlr_scene_tree_create(root->node.scene_node);
+	node_init(&output->node, &scene_tree->node, N_OUTPUT, output);
 	output->wlr_output = wlr_output;
 	wlr_output->data = output;
 	output->detected_subpixel = wlr_output->subpixel;

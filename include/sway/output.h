@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <wayland-server-core.h>
 #include <wlr/types/wlr_output.h>
+#include <wlr/types/wlr_scene.h>
 #include "config.h"
 #include "sway/tree/node.h"
 #include "sway/tree/view.h"
@@ -19,6 +20,7 @@ struct sway_output_state {
 struct sway_output {
 	struct sway_node node;
 	struct wlr_output *wlr_output;
+	struct wlr_scene_output *scene_output;
 	struct sway_server *server;
 	struct wl_list link;
 
@@ -26,7 +28,6 @@ struct sway_output {
 	struct wlr_box usable_area;
 
 	struct timespec last_frame;
-	struct wlr_output_damage *damage;
 
 	int lx, ly; // layout coords
 	int width, height; // transformed buffer size
@@ -44,8 +45,8 @@ struct sway_output {
 	struct wl_listener commit;
 	struct wl_listener mode;
 	struct wl_listener present;
-	struct wl_listener damage_destroy;
-	struct wl_listener damage_frame;
+	struct wl_listener frame;
+	struct wl_listener needs_frame;
 
 	struct {
 		struct wl_signal disable;
@@ -75,19 +76,6 @@ typedef void (*sway_surface_iterator_func_t)(struct sway_output *output,
 	struct sway_view *view, struct wlr_surface *surface, struct wlr_box *box,
 	void *user_data);
 
-void output_damage_whole(struct sway_output *output);
-
-void output_damage_surface(struct sway_output *output, double ox, double oy,
-	struct wlr_surface *surface, bool whole);
-
-void output_damage_from_view(struct sway_output *output,
-	struct sway_view *view);
-
-void output_damage_box(struct sway_output *output, struct wlr_box *box);
-
-void output_damage_whole_container(struct sway_output *output,
-	struct sway_container *con);
-
 // this ONLY includes the enabled outputs
 struct sway_output *output_by_name_or_id(const char *name_or_id);
 
@@ -106,40 +94,6 @@ struct sway_workspace *output_get_active_workspace(struct sway_output *output);
 
 void output_render(struct sway_output *output, struct timespec *when,
 	pixman_region32_t *damage);
-
-void output_surface_for_each_surface(struct sway_output *output,
-		struct wlr_surface *surface, double ox, double oy,
-		sway_surface_iterator_func_t iterator, void *user_data);
-
-void output_view_for_each_surface(struct sway_output *output,
-	struct sway_view *view, sway_surface_iterator_func_t iterator,
-	void *user_data);
-
-void output_view_for_each_popup_surface(struct sway_output *output,
-		struct sway_view *view, sway_surface_iterator_func_t iterator,
-		void *user_data);
-
-void output_layer_for_each_surface(struct sway_output *output,
-	struct wl_list *layer_surfaces, sway_surface_iterator_func_t iterator,
-	void *user_data);
-
-void output_layer_for_each_toplevel_surface(struct sway_output *output,
-	struct wl_list *layer_surfaces, sway_surface_iterator_func_t iterator,
-	void *user_data);
-
-void output_layer_for_each_popup_surface(struct sway_output *output,
-	struct wl_list *layer_surfaces, sway_surface_iterator_func_t iterator,
-	void *user_data);
-
-#if HAVE_XWAYLAND
-void output_unmanaged_for_each_surface(struct sway_output *output,
-	struct wl_list *unmanaged, sway_surface_iterator_func_t iterator,
-	void *user_data);
-#endif
-
-void output_drag_icons_for_each_surface(struct sway_output *output,
-	struct wl_list *drag_icons, sway_surface_iterator_func_t iterator,
-	void *user_data);
 
 void output_for_each_workspace(struct sway_output *output,
 		void (*f)(struct sway_workspace *ws, void *data), void *data);

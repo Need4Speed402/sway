@@ -2,6 +2,7 @@
 #define _SWAY_NODE_H
 #include <stdbool.h>
 #include "list.h"
+#include <wlr/types/wlr_scene.h>
 
 #define MIN_SANE_W 100
 #define MIN_SANE_H 60
@@ -22,6 +23,8 @@ enum sway_node_type {
 
 struct sway_node {
 	enum sway_node_type type;
+	struct sway_node *parent;
+	struct wlr_scene_node *scene_node;
 	union {
 		struct sway_root *sway_root;
 		struct sway_output *sway_output;
@@ -48,7 +51,7 @@ struct sway_node {
 	} events;
 };
 
-void node_init(struct sway_node *node, enum sway_node_type type, void *thing);
+void node_init(struct sway_node *node, struct wlr_scene_node *scene_node, enum sway_node_type type, void *thing);
 
 const char *node_type_to_str(enum sway_node_type type);
 

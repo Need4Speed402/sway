@@ -7,11 +7,13 @@
 #include "sway/tree/workspace.h"
 #include "log.h"
 
-void node_init(struct sway_node *node, enum sway_node_type type, void *thing) {
+void node_init(struct sway_node *node, struct wlr_scene_node *scene_node, enum sway_node_type type, void *thing) {
 	static size_t next_id = 1;
 	node->id = next_id++;
 	node->type = type;
 	node->sway_root = thing;
+	node->scene_node = scene_node;
+
 	wl_signal_init(&node->events.destroy);
 }
 
