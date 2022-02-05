@@ -155,14 +155,13 @@ static void copy_container_state(struct sway_container *container,
 		state->children = NULL;
 	}
 
+
 	struct sway_seat *seat = input_manager_current_seat();
 	if (seat_get_focus(seat) == &container->node) {
 		state->focus_state = FOCUS_FOCUSED;
 	}else if (state->focus_state == FOCUS_FOCUSED) {
 		state->focus_state = FOCUS_UNFOCUSED;
 	}
-
-	container_set_focus_state(container, state->focus_state);
 
 	if (!container->view) {
 		struct sway_node *focus =
@@ -235,27 +234,51 @@ static void apply_output_state(struct sway_output *output,
 static void apply_workspace_state(struct sway_workspace *ws,
 		struct sway_workspace_state *state) {
 	list_free(ws->current.floating);
-	list_free(ws->current.tiling);
 	memcpy(&ws->current, state, sizeof(struct sway_workspace_state));
 
-	for (int i = 0; i < ws->current.tiling->length; i++) {
-		struct sway_container *child = ws->current.tiling->items[i];
+	if (ws->current.layout == L_VERT) {
+		double off = 0;
+		for (int i = 0; i < ws->current.tiling->length; i++) {
+			struct sway_container *child = ws->current.tiling->items[i];
 
-		wlr_scene_node_reparent(child->node.scene_node, ws->node.scene_node);
+			wlr_scene_node_reparent(child->node.scene_node, ws->node.scene_node);
+			wlr_scene_node_set_enabled(child->content.node, true);
+			wlr_scene_node_set_position(child->node.scene_node, 0, round(off * ws->current.height));
+			off += child->height_fraction;
+		}
+	} else if (ws->current.layout == L_HORIZ) {
+		double off = 0;
+		for (int i = 0; i < ws->current.tiling->length; i++) {
+			struct sway_container *child = ws->current.tiling->items[i];
 
-		wlr_scene_node_set_position(child->node.scene_node,
-			child->pending.x - ws->current.x,
-			child->pending.y - ws->current.y);
+			wlr_scene_node_reparent(child->node.scene_node, ws->node.scene_node);
+			wlr_scene_node_set_enabled(child->content.node, true);
+			wlr_scene_node_set_position(child->node.scene_node, round(off * ws->current.width), 0);
+			off += child->width_fraction;
+		}
 	}
 
 	for (int i = 0; i < ws->current.floating->length; i++) {
 		struct sway_container *child = ws->current.floating->items[i];
 
 		wlr_scene_node_reparent(child->node.scene_node, ws->node.scene_node);
-		wlr_scene_node_set_position(child->node.scene_node,
-			child->pending.x - ws->current.x,
-			child->pending.y - ws->current.y);
 	}
+}
+
+static void layout_title_bar(struct sway_container *con,
+		int x, int y, int width, int height) {
+	int titlebar_border_thickness = config->titlebar_border_thickness;
+
+	wlr_scene_rect_set_size(con->title_bar.border, width, height);
+	wlr_scene_rect_set_size(con->title_bar.background,
+		width - titlebar_border_thickness * 2,
+		height - titlebar_border_thickness * 2);
+
+	wlr_scene_node_set_position(con->title_bar.node, x, y);
+	wlr_scene_node_set_position(&con->title_bar.background->node,
+		titlebar_border_thickness, titlebar_border_thickness);
+
+	container_layout_title_bar(con, width, height);
 }
 
 static void apply_container_state(struct sway_container *container,
@@ -270,66 +293,101 @@ static void apply_container_state(struct sway_container *container,
 
 	memcpy(&container->current, state, sizeof(struct sway_container_state));
 
-	wlr_scene_node_set_enabled(container->title_bar.node, container->current.border_top);
-	wlr_scene_node_set_enabled(&container->border.bottom->node, container->current.border_bottom);
-	wlr_scene_node_set_enabled(&container->border.left->node, container->current.border_left);
-	wlr_scene_node_set_enabled(&container->border.right->node, container->current.border_right);
+	if (container_is_current_floating(container)) {
+		wlr_scene_node_set_position(container->node.scene_node, container->current.x, container->current.y);
+	} else if (container->current.workspace) {
+		list_t *siblings = container_get_current_siblings(container);
+		enum sway_container_layout layout = container_current_parent_layout(container);
 
-	int title_bar_height = container->current.title_bar_height;
-	int border_width = container->current.border_thickness;
-	enum alignment title_align = config->title_align;
-	int titlebar_border_thickness = config->titlebar_border_thickness;
-
-	wlr_scene_rect_set_size(container->title_bar.border,
-		container->current.width, title_bar_height);
-	wlr_scene_rect_set_size(container->title_bar.background,
-		container->current.width - titlebar_border_thickness * 2,
-		title_bar_height - titlebar_border_thickness * 2);
-	wlr_scene_rect_set_size(container->border.bottom,
-		container->current.width, border_width);
-	wlr_scene_rect_set_size(container->border.left,
-		border_width, container->current.height - border_width - title_bar_height);
-	wlr_scene_rect_set_size(container->border.right,
-		border_width, container->current.height - border_width - title_bar_height);
-
-	wlr_scene_node_set_position(&container->title_bar.background->node,
-		titlebar_border_thickness, titlebar_border_thickness);
-	wlr_scene_node_set_position(&container->border.bottom->node, 0,
-		container->current.content_height + title_bar_height);
-	wlr_scene_node_set_position(&container->border.left->node, 0, title_bar_height);
-	wlr_scene_node_set_position(&container->border.right->node,
-		container->current.content_width + border_width, title_bar_height);
-
-	int marks_buffer_width = 0;
-	if (container->title_bar.marks_buffer) {
-		struct my_buffer *buffer = wl_container_of(container->title_bar.marks_buffer->buffer, buffer, base);
-		marks_buffer_width = buffer->width;
-
-		int h_padding;
-		if (title_align == ALIGN_RIGHT) {
-			h_padding = config->titlebar_h_padding;
-		}else{
-			h_padding = container->current.width - config->titlebar_h_padding - marks_buffer_width;
-		}
-
-		wlr_scene_node_set_position(&container->title_bar.marks_buffer->node, h_padding, (title_bar_height - buffer->height) >> 1);
+		if (siblings->length == 1) {
+			if (layout == L_VERT) {
+				container->current.focus_state |= FOCUS_SPLITV;
+			}else if (layout == L_HORIZ) {
+				container->current.focus_state |= FOCUS_SPLITH;
+			}
+		} 
 	}
 
-	if (container->title_bar.title_buffer) {
-		struct my_buffer *buffer = wl_container_of(container->title_bar.title_buffer->buffer, buffer, base);
+	container_set_focus_state(container, container->current.focus_state);
 
-		int h_padding;
-		if (title_align == ALIGN_RIGHT) {
-			h_padding = container->current.width - config->titlebar_h_padding - buffer->width;
-		}else if (title_align == ALIGN_CENTER) {
-			h_padding = ((int) container->current.width - marks_buffer_width - buffer->width) >> 1;
-		}else{
-			h_padding = config->titlebar_h_padding;
+	int content_x = 0, content_y = 0;
+	int title_bar_height = container_titlebar_height();
+
+	if (container->current.layout == L_TABBED) {
+		wlr_scene_node_set_enabled(container->title_bar.node, container->current.border_top);
+		content_y = title_bar_height;
+
+		double w = (double) container->current.width / container->current.children->length;
+		for (int i = 0; i < container->current.children->length; i++) {
+			struct sway_container *child = container->current.children->items[i];
+
+			layout_title_bar(child, w * i, -content_y, w, content_y);
+			wlr_scene_node_set_enabled(child->content.node, child == container->current.focused_inactive_child);
+			wlr_scene_node_set_position(child->node.scene_node, 0, 0);
 		}
+	} else if (container->current.layout == L_STACKED) {
+		wlr_scene_node_set_enabled(container->title_bar.node, container->current.border_top);
+		content_y = title_bar_height * container->current.children->length;
 
-		wlr_scene_node_set_position(&container->title_bar.title_buffer->node, h_padding, (title_bar_height - buffer->height) >> 1);
+		int y = 0;
+		for (int i = 0; i < container->current.children->length; i++) {
+			struct sway_container *child = container->current.children->items[i];
+
+			layout_title_bar(child, 0, y - content_y, container->current.width, title_bar_height);
+			wlr_scene_node_set_enabled(child->content.node, child == container->current.focused_inactive_child);
+			wlr_scene_node_set_position(child->node.scene_node, 0, 0);
+
+			y += title_bar_height;
+		}
+	} else if (container->current.layout == L_VERT) {
+		double off = 0;
+		for (int i = 0; i < container->current.children->length; i++) {
+			struct sway_container *child = container->current.children->items[i];
+
+			wlr_scene_node_set_enabled(child->content.node, true);
+			wlr_scene_node_set_position(child->node.scene_node, 0, round(off * container->current.height));
+			off += child->height_fraction;
+		}
+	} else if (container->current.layout == L_HORIZ) {
+		double off = 0;
+		for (int i = 0; i < container->current.children->length; i++) {
+			struct sway_container *child = container->current.children->items[i];
+
+			wlr_scene_node_set_enabled(child->content.node, true);
+			wlr_scene_node_set_position(child->node.scene_node, round(off * container->current.width), 0);
+			off += child->width_fraction;
+		}
+	} else {
+		//wlr_scene_node_set_enabled(container->title_bar.node, container->current.border_top);
+		wlr_scene_node_set_enabled(&container->content.border_bottom->node, container->current.border_bottom);
+		wlr_scene_node_set_enabled(&container->content.border_left->node, container->current.border_left);
+		wlr_scene_node_set_enabled(&container->content.border_right->node, container->current.border_right);
+
+		int border_width = container->current.border_thickness;
+
+		wlr_scene_rect_set_size(container->content.border_bottom,
+			container->current.width, border_width);
+		wlr_scene_rect_set_size(container->content.border_left,
+			border_width, container->current.height - border_width - title_bar_height);
+		wlr_scene_rect_set_size(container->content.border_right,
+			border_width, container->current.height - border_width - title_bar_height);
+
+		wlr_scene_node_set_position(&container->content.border_bottom->node, -border_width,
+			container->current.content_height);
+		wlr_scene_node_set_position(&container->content.border_left->node, -border_width, 0);
+		wlr_scene_node_set_position(&container->content.border_right->node,
+			container->current.content_width, 0);
+
+		content_x = border_width;
+
+		if (container->current.border_top) {
+			layout_title_bar(container, 0, 0, container->current.width, title_bar_height);
+			content_y = title_bar_height;
+		}
 	}
-	
+
+	wlr_scene_node_set_position(container->content.node, content_x, content_y);
+
 	if (view) {
 		if (!wl_list_empty(&view->saved_buffers)) {
 			if (!container->node.destroying || container->node.ntxnrefs == 1) {
@@ -346,11 +404,7 @@ static void apply_container_state(struct sway_container *container,
 	}else{
 		for (int i = 0; i < container->current.children->length; i++) {
 			struct sway_container *child = container->current.children->items[i];
-
-			wlr_scene_node_reparent(child->node.scene_node, container->node.scene_node);
-			wlr_scene_node_set_position(child->node.scene_node,
-				child->pending.x - container->current.x,
-				child->pending.y - container->current.y);
+			wlr_scene_node_reparent(child->node.scene_node, container->content.node);
 		}
 	}
 

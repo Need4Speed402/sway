@@ -350,10 +350,6 @@ void view_autoconfigure(struct sway_view *view) {
 		break;
 	}
 
-
-	wlr_scene_node_set_position(view->scene_node, x, y);
-	con->pending.title_bar_height = y;
-
 	con->pending.content_x = x + con->pending.x;
 	con->pending.content_y = y + con->pending.y;
 	con->pending.content_width = width;

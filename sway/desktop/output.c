@@ -163,6 +163,23 @@ static void handle_mode(struct wl_listener *listener, void *data) {
 	update_output_manager_config(output->server);
 }
 
+static void handle_commit(struct wl_listener *listener, void *data) {
+	struct sway_output *output = wl_container_of(listener, output, commit);
+	struct wlr_output_event_commit *event = data;
+
+	if (!output->enabled) {
+		return;
+	}
+
+	if (event->committed & (WLR_OUTPUT_STATE_TRANSFORM | WLR_OUTPUT_STATE_SCALE)) {
+		arrange_layers(output);
+		arrange_output(output);
+		transaction_commit_dirty();
+
+		update_output_manager_config(output->server);
+	}
+}
+
 static void handle_present(struct wl_listener *listener, void *data) {
 	struct sway_output *output = wl_container_of(listener, output, present);
 	struct wlr_output_event_present *output_event = data;
@@ -221,10 +238,8 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 
 	wl_signal_add(&wlr_output->events.destroy, &output->destroy);
 	output->destroy.notify = handle_destroy;
-	/*
 	wl_signal_add(&wlr_output->events.commit, &output->commit);
 	output->commit.notify = handle_commit;
-	*/
 	wl_signal_add(&wlr_output->events.mode, &output->mode);
 	output->mode.notify = handle_mode;
 	wl_signal_add(&wlr_output->events.present, &output->present);

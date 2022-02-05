@@ -11,10 +11,11 @@ struct sway_view;
 struct sway_seat;
 
 enum sway_container_focus_state {
-	FOCUS_FOCUSED,
-	FOCUS_UNFOCUSED,
-	FOCUS_URGENT,
-	FOCUS_CHILD_URGENT
+	FOCUS_UNFOCUSED = 1 << 1,
+	FOCUS_FOCUSED = 1 << 2,
+	FOCUS_URGENT = 1 << 3,
+	FOCUS_SPLITV = 1 << 4,
+	FOCUS_SPLITH = 1 << 5,
 };
 
 enum sway_container_layout {
@@ -61,7 +62,7 @@ struct sway_container_state {
 	struct sway_container *focused_inactive_child;
 
 	enum sway_container_border border;
-	int border_thickness, title_bar_height;
+	int border_thickness;
 	bool border_top;
 	bool border_bottom;
 	bool border_left;
@@ -97,16 +98,19 @@ struct sway_container {
 	} title_bar;
 
 	struct {
-		struct wlr_scene_rect *bottom;
-		struct wlr_scene_rect *left;
-		struct wlr_scene_rect *right;
-	} border;
+		struct wlr_scene_node *node;
+
+		struct wlr_scene_rect *border_bottom;
+		struct wlr_scene_rect *border_left;
+		struct wlr_scene_rect *border_right;
+	} content;
 
 	struct sway_container_state current;
 	struct sway_container_state pending;
 
 	char *title;           // The view's title (unformatted)
 	char *formatted_title; // The title displayed in the title bar
+	int title_width;
 
 	enum sway_container_layout prev_split_layout;
 
@@ -393,5 +397,7 @@ bool container_is_sticky_or_child(struct sway_container *con);
 int container_squash(struct sway_container *con);
 
 void container_set_focus_state(struct sway_container *con, enum sway_container_focus_state focus_state);
+
+void container_layout_title_bar(struct sway_container *con, int width, int height);
 
 #endif

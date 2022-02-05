@@ -95,9 +95,11 @@ struct sway_container *container_create(struct sway_view *view) {
 	c->title_bar.border = wlr_scene_rect_create(c->title_bar.node, 0, 0, (float[4]){0.f, 0.f, 0.f, 1} );
 	c->title_bar.background = wlr_scene_rect_create(c->title_bar.node, 0, 0, (float[4]){0.f, 0.f, 0.f, 1} );
 
-	c->border.bottom = wlr_scene_rect_create(c->node.scene_node, 0, 0, (float[4]){0.f, 0.f, 0.f, 1} );
-	c->border.left = wlr_scene_rect_create(c->node.scene_node, 0, 0, (float[4]){0.f, 0.f, 0.f, 1} );
-	c->border.right = wlr_scene_rect_create(c->node.scene_node, 0, 0, (float[4]){0.f, 0.f, 0.f, 1} );
+	struct wlr_scene_tree *content_tree = wlr_scene_tree_create(c->node.scene_node);
+	c->content.node = &content_tree->node;
+	c->content.border_bottom = wlr_scene_rect_create(c->content.node, 0, 0, (float[4]){0.f, 0.f, 0.f, 1} );
+	c->content.border_left = wlr_scene_rect_create(c->content.node, 0, 0, (float[4]){0.f, 0.f, 0.f, 1} );
+	c->content.border_right = wlr_scene_rect_create(c->content.node, 0, 0, (float[4]){0.f, 0.f, 0.f, 1} );
 
 	if (!view) {
 		c->pending.children = create_list();
@@ -110,7 +112,7 @@ struct sway_container *container_create(struct sway_view *view) {
 	wl_signal_emit(&root->events.new_node, &c->node);
 
 	if (view) {
-		wlr_scene_node_reparent(view->scene_node, c->node.scene_node);
+		wlr_scene_node_reparent(view->scene_node, c->content.node);
 	}
 
 	container_set_focus_state(c, FOCUS_UNFOCUSED);
@@ -120,19 +122,30 @@ struct sway_container *container_create(struct sway_view *view) {
 
 void container_set_focus_state(struct sway_container *con, enum sway_container_focus_state focus_state) {
 	struct border_colors *colors;
-	if (focus_state == FOCUS_FOCUSED) {
+
+	if (focus_state & FOCUS_FOCUSED) {
 		colors = &config->border_colors.focused;
-	}else if (focus_state == FOCUS_UNFOCUSED) {
+	} else if (focus_state & FOCUS_UNFOCUSED) {
 		colors = &config->border_colors.unfocused;
-	}else if (focus_state == FOCUS_URGENT || focus_state == FOCUS_CHILD_URGENT) {
+	} else if (focus_state & FOCUS_URGENT) {
 		colors = &config->border_colors.urgent;
+	}
+
+	const float *bottom, *right;
+	bottom = (const float *) colors->child_border;
+	right = (const float *) colors->child_border;
+
+	if (focus_state & FOCUS_SPLITV) {
+		bottom = (const float *) colors->indicator;
+	} else if (focus_state & FOCUS_SPLITH) {
+		right = (const float *) colors->indicator;
 	}
 
 	wlr_scene_rect_set_color(con->title_bar.border, (const float *) colors->border);
 	wlr_scene_rect_set_color(con->title_bar.background, (const float *) colors->background);
-	wlr_scene_rect_set_color(con->border.bottom, (const float *) colors->child_border);
-	wlr_scene_rect_set_color(con->border.left, (const float *) colors->child_border);
-	wlr_scene_rect_set_color(con->border.right, (const float *) colors->child_border);
+	wlr_scene_rect_set_color(con->content.border_bottom, bottom);
+	wlr_scene_rect_set_color(con->content.border_left, (const float *) colors->child_border);
+	wlr_scene_rect_set_color(con->content.border_right, right);
 	container_update_title_textures(con);
 }
 
@@ -634,6 +647,41 @@ static struct wlr_scene_buffer *create_text_scene_node (struct sway_output *outp
 	return node;
 }
 
+void container_layout_title_bar(struct sway_container *con, int width, int height) {
+	enum alignment title_align = config->title_align;
+	con->title_width = width;
+
+	int marks_buffer_width = 0;
+	if (con->title_bar.marks_buffer) {
+		struct my_buffer *buffer = wl_container_of(con->title_bar.marks_buffer->buffer, buffer, base);
+		marks_buffer_width = buffer->width;
+
+		int h_padding;
+		if (title_align == ALIGN_RIGHT) {
+			h_padding = config->titlebar_h_padding;
+		}else{
+			h_padding = width - config->titlebar_h_padding - marks_buffer_width;
+		}
+
+		wlr_scene_node_set_position(&con->title_bar.marks_buffer->node, h_padding, (height - buffer->height) >> 1);
+	}
+
+	if (con->title_bar.title_buffer) {
+		struct my_buffer *buffer = wl_container_of(con->title_bar.title_buffer->buffer, buffer, base);
+
+		int h_padding;
+		if (title_align == ALIGN_RIGHT) {
+			h_padding = width - config->titlebar_h_padding - buffer->width;
+		}else if (title_align == ALIGN_CENTER) {
+			h_padding = ((int) width - marks_buffer_width - buffer->width) >> 1;
+		}else{
+			h_padding = config->titlebar_h_padding;
+		}
+
+		wlr_scene_node_set_position(&con->title_bar.title_buffer->node, h_padding, (height - buffer->height) >> 1);
+	}
+}
+
 void container_update_title_textures(struct sway_container *con) {
 	struct sway_output *output = container_get_effective_output(con);
 	if (!output) {
@@ -646,11 +694,11 @@ void container_update_title_textures(struct sway_container *con) {
 
 	enum sway_container_focus_state focus_state = con->current.focus_state;
 	struct border_colors *colors;
-	if (focus_state == FOCUS_FOCUSED) {
+	if (focus_state & FOCUS_FOCUSED) {
 		colors = &config->border_colors.focused;
-	}else if (focus_state == FOCUS_UNFOCUSED) {
+	}else if (focus_state & FOCUS_UNFOCUSED) {
 		colors = &config->border_colors.unfocused;
-	}else if (focus_state == FOCUS_URGENT || focus_state == FOCUS_CHILD_URGENT) {
+	}else if (focus_state & FOCUS_URGENT) {
 		colors = &config->border_colors.urgent;
 	}
 
@@ -695,6 +743,8 @@ void container_update_title_textures(struct sway_container *con) {
 		con->title_bar.marks_buffer = create_text_scene_node(output, con, colors->text,
 			false, buffer);
 	}
+
+	container_layout_title_bar(con, con->title_width, container_titlebar_height());
 }
 
 /**

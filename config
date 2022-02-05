@@ -12,6 +12,9 @@ bindsym $mod+shift+o scratchpad show
 bindsym $mod+w splith
 bindsym $mod+v splitv
 bindsym $mod+Escape kill
+bindsym $mod+semicolon layout tabbed
+bindsym $mod+Shift+semicolon layout stacking
+bindsym $mod+q layout toggle
 
 bindsym $mod+0 workspace 0
 bindsym $mod+1 workspace 1
