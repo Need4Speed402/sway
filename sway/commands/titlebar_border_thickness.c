@@ -2,7 +2,6 @@
 #include "sway/commands.h"
 #include "sway/config.h"
 #include "sway/output.h"
-#include "sway/tree/arrange.h"
 #include "log.h"
 
 struct cmd_results *cmd_titlebar_border_thickness(int argc, char **argv) {
@@ -26,7 +25,6 @@ struct cmd_results *cmd_titlebar_border_thickness(int argc, char **argv) {
 			return cmd_results_new(CMD_FAILURE,
 					"Expected output to have a workspace");
 		}
-		arrange_workspace(ws);
 	}
 
 	return cmd_results_new(CMD_SUCCESS, NULL);

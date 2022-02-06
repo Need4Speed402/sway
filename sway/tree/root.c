@@ -7,7 +7,6 @@
 #include "sway/input/seat.h"
 #include "sway/ipc-server.h"
 #include "sway/output.h"
-#include "sway/tree/arrange.h"
 #include "sway/tree/container.h"
 #include "sway/tree/root.h"
 #include "sway/tree/workspace.h"
@@ -20,7 +19,6 @@ struct sway_root *root;
 
 static void output_layout_handle_change(struct wl_listener *listener,
 		void *data) {
-	arrange_root();
 	transaction_commit_dirty();
 }
 
@@ -91,11 +89,9 @@ void root_scratchpad_add_container(struct sway_container *con, struct sway_works
 		struct sway_seat *seat = input_manager_current_seat();
 		struct sway_node *new_focus = NULL;
 		if (parent) {
-			arrange_container(parent);
 			new_focus = seat_get_focus_inactive(seat, &parent->node);
 		}
 		if (!new_focus) {
-			arrange_workspace(workspace);
 			new_focus = seat_get_focus_inactive(seat, &workspace->node);
 		}
 		seat_set_focus(seat, new_focus);
@@ -156,7 +152,6 @@ void root_scratchpad_show(struct sway_container *con) {
 		container_floating_resize_and_center(con);
 	}
 
-	arrange_workspace(new_ws);
 	seat_set_focus(seat, seat_get_focus_inactive(seat, &con->node));
 }
 
@@ -180,7 +175,6 @@ void root_scratchpad_hide(struct sway_container *con) {
 	disable_fullscreen(con, NULL);
 	container_for_each_child(con, disable_fullscreen, NULL);
 	container_detach(con);
-	arrange_workspace(ws);
 	if (&con->node == focus || node_has_ancestor(focus, &con->node)) {
 		seat_set_focus(seat, seat_get_focus_inactive(seat, &ws->node));
 	}

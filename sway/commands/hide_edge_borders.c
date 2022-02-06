@@ -1,6 +1,5 @@
 #include "sway/commands.h"
 #include "sway/config.h"
-#include "sway/tree/arrange.h"
 #include "sway/tree/view.h"
 
 struct cmd_results *cmd_hide_edge_borders(int argc, char **argv) {
@@ -41,8 +40,6 @@ struct cmd_results *cmd_hide_edge_borders(int argc, char **argv) {
 		return cmd_results_new(CMD_INVALID, expected_syntax);
 	}
 	config->hide_lone_tab = hide_lone_tab;
-
-	arrange_root();
 
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }

@@ -26,7 +26,6 @@
 #include "sway/output.h"
 #include "sway/server.h"
 #include "sway/surface.h"
-#include "sway/tree/arrange.h"
 #include "sway/tree/container.h"
 #include "sway/tree/root.h"
 #include "sway/tree/view.h"
@@ -156,8 +155,6 @@ static void handle_mode(struct wl_listener *listener, void *data) {
 	if (!output->enabled) {
 		return;
 	}
-	arrange_layers(output);
-	arrange_output(output);
 	transaction_commit_dirty();
 
 	update_output_manager_config(output->server);
@@ -172,8 +169,6 @@ static void handle_commit(struct wl_listener *listener, void *data) {
 	}
 
 	if (event->committed & (WLR_OUTPUT_STATE_TRANSFORM | WLR_OUTPUT_STATE_SCALE)) {
-		arrange_layers(output);
-		arrange_output(output);
 		transaction_commit_dirty();
 
 		update_output_manager_config(output->server);

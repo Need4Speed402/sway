@@ -7,7 +7,6 @@
 #include "sway/input/seat.h"
 #include "sway/ipc-server.h"
 #include "sway/output.h"
-#include "sway/tree/arrange.h"
 #include "sway/tree/node.h"
 #include "sway/tree/view.h"
 #include "sway/tree/workspace.h"
@@ -322,7 +321,6 @@ static void finalize_move(struct sway_seat *seat) {
 
 	struct sway_container *con = e->con;
 	struct sway_container *old_parent = con->pending.parent;
-	struct sway_workspace *old_ws = con->pending.workspace;
 	struct sway_node *target_node = e->target_node;
 	struct sway_workspace *new_ws = target_node->type == N_WORKSPACE ?
 		target_node->sway_workspace : target_node->sway_container->pending.workspace;
@@ -385,11 +383,6 @@ static void finalize_move(struct sway_seat *seat) {
 		con->pending.height = sibling->pending.height;
 		con->width_fraction = sibling->width_fraction;
 		con->height_fraction = sibling->height_fraction;
-	}
-
-	arrange_workspace(old_ws);
-	if (new_ws != old_ws) {
-		arrange_workspace(new_ws);
 	}
 
 	transaction_commit_dirty();

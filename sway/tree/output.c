@@ -7,7 +7,6 @@
 #include "sway/ipc-server.h"
 #include "sway/layers.h"
 #include "sway/output.h"
-#include "sway/tree/arrange.h"
 #include "sway/tree/workspace.h"
 #include "log.h"
 #include "util.h"
@@ -149,9 +148,6 @@ void output_enable(struct sway_output *output) {
 	input_manager_configure_xcursor();
 
 	wl_signal_emit(&root->events.new_node, &output->node);
-
-	arrange_layers(output);
-	arrange_root();
 }
 
 static void evacuate_sticky(struct sway_workspace *old_ws,
@@ -274,8 +270,6 @@ void output_disable(struct sway_output *output) {
 
 	output->enabled = false;
 	output->current_mode = NULL;
-
-	arrange_root();
 
 	// Reconfigure all devices, since devices with map_to_output directives for
 	// an output that goes offline should stop sending events as long as the

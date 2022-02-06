@@ -193,7 +193,6 @@ sway_sources = files(
 	'commands/output/toggle.c',
 	'commands/output/transform.c',
 
-	'tree/arrange.c',
 	'tree/container.c',
 	'tree/node.c',
 	'tree/root.c',

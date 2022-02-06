@@ -4,7 +4,6 @@
 #include "sway/config.h"
 #include "sway/ipc-server.h"
 #include "sway/server.h"
-#include "sway/tree/arrange.h"
 #include "sway/tree/view.h"
 #include "list.h"
 #include "log.h"
@@ -48,8 +47,6 @@ static void do_reload(void *data) {
 	list_free_items_and_destroy(bar_ids);
 
 	root_for_each_container(rebuild_textures_iterator, NULL);
-
-	arrange_root();
 }
 
 struct cmd_results *cmd_reload(int argc, char **argv) {

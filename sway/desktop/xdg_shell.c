@@ -12,7 +12,6 @@
 #include "sway/input/input-manager.h"
 #include "sway/input/seat.h"
 #include "sway/output.h"
-#include "sway/tree/arrange.h"
 #include "sway/tree/container.h"
 #include "sway/tree/view.h"
 #include "sway/tree/workspace.h"
@@ -358,7 +357,6 @@ static void handle_request_fullscreen(struct wl_listener *listener, void *data) 
 
 	container_set_fullscreen(container, req->fullscreen);
 
-	arrange_root();
 	transaction_commit_dirty();
 }
 
@@ -524,4 +522,6 @@ void handle_xdg_shell_surface(struct wl_listener *listener, void *data) {
 	wl_signal_add(&xdg_surface->events.destroy, &xdg_shell_view->destroy);
 
 	xdg_surface->data = xdg_shell_view;
+
+	transaction_commit_dirty();
 }

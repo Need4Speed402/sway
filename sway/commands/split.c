@@ -1,7 +1,6 @@
 #include <string.h>
 #include <strings.h>
 #include "sway/commands.h"
-#include "sway/tree/arrange.h"
 #include "sway/tree/container.h"
 #include "sway/tree/view.h"
 #include "sway/tree/workspace.h"
@@ -23,18 +22,11 @@ static struct cmd_results *do_split(int layout) {
 		workspace_split(ws, layout);
 	}
 
-	if (root->fullscreen_global) {
-		arrange_root();
-	} else {
-		arrange_workspace(ws);
-	}
-
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }
 
 static struct cmd_results *do_unsplit() {
 	struct sway_container *con = config->handler_context.container;
-	struct sway_workspace *ws = config->handler_context.workspace;
 
 	if (con && con->pending.parent && con->pending.parent->pending.children->length == 1) {
 		container_flatten(con->pending.parent);
@@ -42,11 +34,6 @@ static struct cmd_results *do_unsplit() {
 		return cmd_results_new(CMD_FAILURE, "Can only flatten a child container with no siblings");
 	}
 
-	if (root->fullscreen_global) {
-		arrange_root();
-	} else {
-		arrange_workspace(ws);
-	}
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }
 

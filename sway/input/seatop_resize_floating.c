@@ -5,7 +5,6 @@
 #include "sway/desktop/transaction.h"
 #include "sway/input/cursor.h"
 #include "sway/input/seat.h"
-#include "sway/tree/arrange.h"
 #include "sway/tree/view.h"
 #include "sway/tree/workspace.h"
 #include "sway/tree/container.h"
@@ -27,7 +26,6 @@ static void handle_button(struct sway_seat *seat, uint32_t time_msec,
 
 	if (seat->cursor->pressed_button_count == 0) {
 		container_set_resizing(con, false);
-		arrange_container(con); // Send configure w/o resizing hint
 		transaction_commit_dirty();
 		seatop_begin_default(seat);
 	}
@@ -142,7 +140,6 @@ static void handle_pointer_motion(struct sway_seat *seat, uint32_t time_msec) {
 	con->pending.content_width += relative_grow_width;
 	con->pending.content_height += relative_grow_height;
 
-	arrange_container(con);
 	transaction_commit_dirty();
 }
 

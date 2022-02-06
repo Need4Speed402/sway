@@ -23,7 +23,6 @@
 #include "sway/criteria.h"
 #include "sway/desktop/transaction.h"
 #include "sway/swaynag.h"
-#include "sway/tree/arrange.h"
 #include "sway/tree/root.h"
 #include "sway/tree/workspace.h"
 #include "cairo_util.h"
@@ -997,13 +996,7 @@ int workspace_output_cmp_workspace(const void *a, const void *b) {
 
 
 void config_update_font_height(void) {
-	int prev_max_height = config->font_height;
-
 	get_text_metrics(config->font, &config->font_height, &config->font_baseline);
-
-	if (config->font_height != prev_max_height) {
-		arrange_root();
-	}
 }
 
 static void translate_binding_list(list_t *bindings, list_t *bindsyms,

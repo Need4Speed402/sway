@@ -12,7 +12,6 @@
 #include "sway/input/seat.h"
 #include "sway/ipc-server.h"
 #include "sway/output.h"
-#include "sway/tree/arrange.h"
 #include "sway/tree/container.h"
 #include "sway/tree/root.h"
 #include "sway/tree/workspace.h"
@@ -605,15 +604,6 @@ static struct cmd_results *cmd_move_container(bool no_auto_back_and_forth,
 		workspace_consider_destroy(old_ws);
 	}
 
-	// arrange windows
-	if (root->fullscreen_global) {
-		arrange_root();
-	} else {
-		if (old_ws && !old_ws->node.destroying) {
-			arrange_workspace(old_ws);
-		}
-		arrange_node(node_get_parent(destination));
-	}
 
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }
@@ -683,9 +673,6 @@ static struct cmd_results *cmd_move_workspace(int argc, char **argv) {
 	}
 	workspace_move_to_output(workspace, new_output);
 
-	arrange_output(old_output);
-	arrange_output(new_output);
-
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }
 
@@ -745,15 +732,6 @@ static struct cmd_results *cmd_move_in_direction(
 	}
 
 	struct sway_workspace *new_ws = container->pending.workspace;
-
-	if (root->fullscreen_global) {
-		arrange_root();
-	} else {
-		arrange_workspace(old_ws);
-		if (new_ws != old_ws) {
-			arrange_workspace(new_ws);
-		}
-	}
 
 	if (container->view) {
 		ipc_event_window(container, "move");

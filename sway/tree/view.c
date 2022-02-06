@@ -23,7 +23,6 @@
 #include "sway/output.h"
 #include "sway/input/seat.h"
 #include "sway/server.h"
-#include "sway/tree/arrange.h"
 #include "sway/tree/container.h"
 #include "sway/tree/view.h"
 #include "sway/tree/workspace.h"
@@ -674,15 +673,6 @@ static void handle_foreign_fullscreen_request(
 
 	container_set_fullscreen(container,
 		event->fullscreen ? FULLSCREEN_WORKSPACE : FULLSCREEN_NONE);
-	if (event->fullscreen) {
-		arrange_root();
-	} else {
-		if (container->pending.parent) {
-			arrange_container(container->pending.parent);
-		} else if (container->pending.workspace) {
-			arrange_workspace(container->pending.workspace);
-		}
-	}
 	transaction_commit_dirty();
 }
 
@@ -808,13 +798,6 @@ void view_map(struct sway_view *view, struct wlr_surface *wlr_surface,
 
 	if (fullscreen) {
 		container_set_fullscreen(view->container, true);
-		arrange_workspace(view->container->pending.workspace);
-	} else {
-		if (container->pending.parent) {
-			arrange_container(container->pending.parent);
-		} else if (container->pending.workspace) {
-			arrange_workspace(container->pending.workspace);
-		}
 	}
 
 	view_execute_criteria(view);
@@ -865,14 +848,6 @@ void view_unmap(struct sway_view *view) {
 		container_reap_empty(parent);
 	} else if (ws) {
 		workspace_consider_destroy(ws);
-	}
-
-	if (root->fullscreen_global) {
-		// Container may have been a child of the root fullscreen container
-		arrange_root();
-	} else if (ws && !ws->node.destroying) {
-		arrange_workspace(ws);
-		workspace_detect_urgent(ws);
 	}
 
 	struct sway_seat *seat;

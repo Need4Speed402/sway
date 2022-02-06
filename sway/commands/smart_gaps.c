@@ -1,7 +1,6 @@
 #include <string.h>
 #include "sway/commands.h"
 #include "sway/config.h"
-#include "sway/tree/arrange.h"
 #include "sway/tree/view.h"
 #include "sway/tree/container.h"
 #include "log.h"
@@ -21,8 +20,6 @@ struct cmd_results *cmd_smart_gaps(int argc, char **argv) {
 		config->smart_gaps = parse_boolean(argv[0], config->smart_gaps)
 			? SMART_GAPS_ON : SMART_GAPS_OFF;
 	}
-
-	arrange_root();
 
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }

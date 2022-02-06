@@ -4,7 +4,6 @@
 #include "sway/input/seat.h"
 #include "sway/ipc-server.h"
 #include "sway/output.h"
-#include "sway/tree/arrange.h"
 #include "sway/tree/container.h"
 #include "sway/tree/view.h"
 #include "sway/tree/workspace.h"
@@ -49,11 +48,6 @@ struct cmd_results *cmd_floating(int argc, char **argv) {
 		parse_boolean(argv[0], container_is_floating(container));
 
 	container_set_floating(container, wants_floating);
-
-	// Floating containers in the scratchpad should be ignored
-	if (container->pending.workspace) {
-		arrange_workspace(container->pending.workspace);
-	}
 
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }

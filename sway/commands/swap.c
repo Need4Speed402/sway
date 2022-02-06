@@ -4,7 +4,6 @@
 #include "log.h"
 #include "sway/commands.h"
 #include "sway/output.h"
-#include "sway/tree/arrange.h"
 #include "sway/tree/root.h"
 #include "sway/tree/view.h"
 #include "sway/tree/workspace.h"
@@ -263,19 +262,6 @@ struct cmd_results *cmd_swap(int argc, char **argv) {
 	}
 
 	container_swap(current, other);
-
-	if (root->fullscreen_global) {
-		arrange_root();
-	} else {
-		struct sway_node *current_parent = node_get_parent(&current->node);
-		struct sway_node *other_parent = node_get_parent(&other->node);
-		if (current_parent) {
-			arrange_node(current_parent);
-		}
-		if (other_parent && current_parent != other_parent) {
-			arrange_node(other_parent);
-		}
-	}
 
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }

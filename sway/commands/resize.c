@@ -7,7 +7,6 @@
 #include <strings.h>
 #include <wlr/util/edges.h>
 #include "sway/commands.h"
-#include "sway/tree/arrange.h"
 #include "sway/tree/view.h"
 #include "sway/tree/workspace.h"
 #include "log.h"
@@ -177,12 +176,6 @@ void container_resize_tiled(struct sway_container *con,
 			prev->height_fraction -= sibling_amount_fraction;
 		}
 	}
-
-	if (con->pending.parent) {
-		arrange_container(con->pending.parent);
-	} else {
-		arrange_workspace(con->pending.workspace);
-	}
 }
 
 /**
@@ -236,8 +229,6 @@ static struct cmd_results *resize_adjust_floating(uint32_t axis,
 	con->pending.content_y += grow_y;
 	con->pending.content_width += grow_width;
 	con->pending.content_height += grow_height;
-
-	arrange_container(con);
 
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }
@@ -383,8 +374,6 @@ static struct cmd_results *resize_set_floating(struct sway_container *con,
 	con->pending.content_y -= grow_height / 2;
 	con->pending.content_width += grow_width;
 	con->pending.content_height += grow_height;
-
-	arrange_container(con);
 
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }

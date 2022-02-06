@@ -2,7 +2,6 @@
 #include "sway/decoration.h"
 #include "sway/desktop/transaction.h"
 #include "sway/server.h"
-#include "sway/tree/arrange.h"
 #include "sway/tree/view.h"
 #include "log.h"
 
@@ -30,7 +29,6 @@ static void server_decoration_handle_mode(struct wl_listener *listener,
 			WLR_SERVER_DECORATION_MANAGER_MODE_CLIENT;
 	view_update_csd_from_client(view, csd);
 
-	arrange_container(view->container);
 	transaction_commit_dirty();
 }
 

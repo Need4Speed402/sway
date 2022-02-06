@@ -3,7 +3,6 @@
 #include <strings.h>
 #include "sway/commands.h"
 #include "sway/output.h"
-#include "sway/tree/arrange.h"
 #include "sway/tree/container.h"
 #include "sway/tree/workspace.h"
 #include "log.h"
@@ -174,11 +173,6 @@ struct cmd_results *cmd_layout(int argc, char **argv) {
 			}
 			workspace->layout = new_layout;
 			workspace_update_representation(workspace);
-		}
-		if (root->fullscreen_global) {
-			arrange_root();
-		} else {
-			arrange_workspace(workspace);
 		}
 	}
 

@@ -156,18 +156,7 @@ static void copy_container_state(struct sway_container *container,
 	}
 
 
-	struct sway_seat *seat = input_manager_current_seat();
-	if (seat_get_focus(seat) == &container->node) {
-		state->focus_state = FOCUS_FOCUSED;
-	}else if (state->focus_state == FOCUS_FOCUSED) {
-		state->focus_state = FOCUS_UNFOCUSED;
-	}
-
-	if (!container->view) {
-		struct sway_node *focus =
-			seat_get_active_tiling_child(seat, &container->node);
-		state->focused_inactive_child = focus ? focus->sway_container : NULL;
-	}
+	
 }
 
 static void transaction_add_node(struct sway_transaction *transaction,
@@ -246,17 +235,6 @@ static void apply_container_state(struct sway_container *container,
 
 	if (container_is_current_floating(container)) {
 		wlr_scene_node_set_position(container->node.scene_node, container->current.x, container->current.y);
-	} else if (container->current.workspace) {
-		list_t *siblings = container_get_current_siblings(container);
-		enum sway_container_layout layout = container_current_parent_layout(container);
-
-		if (siblings->length == 1) {
-			if (layout == L_VERT) {
-				container->current.focus_state |= FOCUS_SPLITV;
-			}else if (layout == L_HORIZ) {
-				container->current.focus_state |= FOCUS_SPLITH;
-			}
-		} 
 	}
 
 	if (view) {
@@ -272,11 +250,6 @@ static void apply_container_state(struct sway_container *container,
 		if (view->surface) {
 			view_center_surface(view);
 		}
-	}else{
-		for (int i = 0; i < container->current.children->length; i++) {
-			struct sway_container *child = container->current.children->items[i];
-			wlr_scene_node_reparent(child->node.scene_node, container->content.node);
-		}
 	}
 
 	if (!container->node.destroying) {
@@ -284,9 +257,118 @@ static void apply_container_state(struct sway_container *container,
 	}
 }
 
+static void normalize_fractions(list_t *children) {
+	if (!children) return;
+	
+	{
+		// Count the number of new windows we are resizing, and how much space
+		// is currently occupied
+		int new_children = 0;
+		double current_width_fraction = 0;
+		for (int i = 0; i < children->length; ++i) {
+			struct sway_container *child = children->items[i];
+			current_width_fraction += child->width_fraction;
+			if (child->width_fraction <= 0) {
+				new_children += 1;
+			}
+		}
+
+		// Calculate each height fraction
+		double total_width_fraction = 0;
+		for (int i = 0; i < children->length; ++i) {
+			struct sway_container *child = children->items[i];
+			if (child->width_fraction <= 0) {
+				if (current_width_fraction <= 0) {
+					child->width_fraction = 1.0;
+				} else if (children->length > new_children) {
+					child->width_fraction = current_width_fraction /
+						(children->length - new_children);
+				} else {
+					child->width_fraction = current_width_fraction;
+				}
+			}
+			total_width_fraction += child->width_fraction;
+		}
+		// Normalize width fractions so the sum is 1.0
+		for (int i = 0; i < children->length; ++i) {
+			struct sway_container *child = children->items[i];
+			child->width_fraction /= total_width_fraction;
+		}
+	}
+
+	{
+		// Count the number of new windows we are resizing, and how much space
+		// is currently occupied
+		int new_children = 0;
+		double current_height_fraction = 0;
+		for (int i = 0; i < children->length; ++i) {
+			struct sway_container *child = children->items[i];
+			current_height_fraction += child->height_fraction;
+			if (child->height_fraction <= 0) {
+				new_children += 1;
+			}
+		}
+
+		// Calculate each height fraction
+		double total_height_fraction = 0;
+		for (int i = 0; i < children->length; ++i) {
+			struct sway_container *child = children->items[i];
+			if (child->height_fraction <= 0) {
+				if (current_height_fraction <= 0) {
+					child->height_fraction = 1.0;
+				} else if (children->length > new_children) {
+					child->height_fraction = current_height_fraction /
+						(children->length - new_children);
+				} else {
+					child->height_fraction = current_height_fraction;
+				}
+			}
+			total_height_fraction += child->height_fraction;
+		}
+		// Normalize height fractions so the sum is 1.0
+		for (int i = 0; i < children->length; ++i) {
+			struct sway_container *child = children->items[i];
+			child->height_fraction /= total_height_fraction;
+		}
+	}
+}
+
 static void layout_title_bar(struct sway_container *con,
 		int x, int y, int width, int height) {
-	container_set_focus_state(con, con->current.focus_state);
+
+	enum sway_container_focus_state focus_state;
+	struct sway_seat *seat = input_manager_current_seat();
+	if (!con->view) {
+		struct sway_node *focus =
+			seat_get_active_tiling_child(seat, &con->node);
+
+		if (focus == &con->node) {
+			focus_state = FOCUS_FOCUSED;
+		}else{
+			focus_state = FOCUS_UNFOCUSED;
+		}
+	}else{
+		if (seat_get_focus(seat) == &con->node) {
+			focus_state = FOCUS_FOCUSED;
+		}else{
+			focus_state = FOCUS_UNFOCUSED;
+		}
+	}
+
+	if (con->current.workspace) {
+		list_t *siblings = container_get_current_siblings(con);
+		enum sway_container_layout layout = container_current_parent_layout(con);
+
+		if (siblings->length == 1) {
+			if (layout == L_VERT) {
+				focus_state |= FOCUS_SPLITV;
+			}else if (layout == L_HORIZ) {
+				focus_state |= FOCUS_SPLITH;
+			}
+		} 
+	}
+
+	container_set_focus_state(con, focus_state);
 
 	int titlebar_border_thickness = config->titlebar_border_thickness;
 
@@ -306,14 +388,16 @@ static void arrange_container (struct sway_container *con, int width, int height
 	int content_x = 0, content_y = 0;
 	int title_bar_height = container_titlebar_height();
 
-	if (con->current.layout == L_TABBED) {
+	normalize_fractions(con->pending.children);
+
+	if (con->pending.layout == L_TABBED) {
 		wlr_scene_node_set_enabled(con->title_bar.node, true);
 		content_y = title_bar_height;
 
-		double w = (double) width / con->current.children->length;
-		for (int i = 0; i < con->current.children->length; i++) {
-			struct sway_container *child = con->current.children->items[i];
-			bool activated = child == con->current.focused_inactive_child;
+		double w = (double) width / con->pending.children->length;
+		for (int i = 0; i < con->pending.children->length; i++) {
+			struct sway_container *child = con->pending.children->items[i];
+			bool activated = child == con->pending.focused_inactive_child;
 
 			layout_title_bar(child, w * i, -content_y, w, content_y);
 			wlr_scene_node_set_enabled(child->content.node, activated);
@@ -324,14 +408,14 @@ static void arrange_container (struct sway_container *con, int width, int height
 				arrange_container(child, width, height - title_bar_height, false);
 			}
 		}
-	} else if (con->current.layout == L_STACKED) {
+	} else if (con->pending.layout == L_STACKED) {
 		wlr_scene_node_set_enabled(con->title_bar.node, true);
-		content_y = title_bar_height * con->current.children->length;
+		content_y = title_bar_height * con->pending.children->length;
 
 		int y = 0;
-		for (int i = 0; i < con->current.children->length; i++) {
-			struct sway_container *child = con->current.children->items[i];
-			bool activated = child == con->current.focused_inactive_child;
+		for (int i = 0; i < con->pending.children->length; i++) {
+			struct sway_container *child = con->pending.children->items[i];
+			bool activated = child == con->pending.focused_inactive_child;
 
 			layout_title_bar(child, 0, y - content_y, width, title_bar_height);
 			wlr_scene_node_set_enabled(child->content.node, activated);
@@ -344,10 +428,10 @@ static void arrange_container (struct sway_container *con, int width, int height
 
 			y += title_bar_height;
 		}
-	} else if (con->current.layout == L_VERT) {
+	} else if (con->pending.layout == L_VERT) {
 		int off = 0;
-		for (int i = 0; i < con->current.children->length; i++) {
-			struct sway_container *child = con->current.children->items[i];
+		for (int i = 0; i < con->pending.children->length; i++) {
+			struct sway_container *child = con->pending.children->items[i];
 			int cheight = round(child->height_fraction * height);
 
 			wlr_scene_node_set_enabled(child->content.node, true);
@@ -356,10 +440,10 @@ static void arrange_container (struct sway_container *con, int width, int height
 			arrange_container(child, width, cheight, true);
 			off += cheight;
 		}
-	} else if (con->current.layout == L_HORIZ) {
+	} else if (con->pending.layout == L_HORIZ) {
 		int off = 0;
-		for (int i = 0; i < con->current.children->length; i++) {
-			struct sway_container *child = con->current.children->items[i];
+		for (int i = 0; i < con->pending.children->length; i++) {
+			struct sway_container *child = con->pending.children->items[i];
 			int cwidth = round(child->width_fraction * width);
 
 			wlr_scene_node_set_enabled(child->content.node, true);
@@ -372,7 +456,7 @@ static void arrange_container (struct sway_container *con, int width, int height
 		title_bar_height *= title_bar;
 
 		if (con->view) {
-			int border_width = con->current.border_thickness;
+			int border_width = con->pending.border_thickness;
 
 			wlr_scene_rect_set_size(con->content.border_bottom, width, border_width);
 			wlr_scene_rect_set_size(con->content.border_left,
@@ -391,6 +475,12 @@ static void arrange_container (struct sway_container *con, int width, int height
 			wlr_scene_node_reparent(con->view->scene_node, con->content.node);
 
 			content_x = border_width;
+
+			if (!con->node.destroying) {
+				view_configure(con->view, 0, 0,
+						width - border_width * 2,
+						height - border_width - title_bar_height);
+			}
 		}
 
 		if (title_bar_height) {
@@ -403,22 +493,24 @@ static void arrange_container (struct sway_container *con, int width, int height
 }
 
 static void arrange_workspace (struct sway_workspace *ws, int width, int height) {
-	struct sway_container *fs = ws->current.fullscreen;
+	struct sway_container *fs = ws->fullscreen;
 	wlr_scene_node_set_enabled(ws->tiling_scene, !fs);	
-	wlr_scene_node_set_enabled(ws->floating_scene, !fs);	
+	wlr_scene_node_set_enabled(ws->floating_scene, !fs);
+
+	normalize_fractions(ws->tiling);
 
 	if (fs) {
 		if (fs->view) {
 			wlr_scene_node_reparent(fs->view->scene_node, ws->node.scene_node);
 		}else{
 			arrange_container(fs, width, height, true);
-			wlr_scene_node_reparent(ws->current.fullscreen->node.scene_node, ws->node.scene_node);
+			wlr_scene_node_reparent(ws->fullscreen->node.scene_node, ws->node.scene_node);
 		}
 	} else {
-		if (ws->current.layout == L_VERT) {
+		if (ws->layout == L_VERT) {
 			int off = 0;
-			for (int i = 0; i < ws->current.tiling->length; i++) {
-				struct sway_container *child = ws->current.tiling->items[i];
+			for (int i = 0; i < ws->tiling->length; i++) {
+				struct sway_container *child = ws->tiling->items[i];
 				int cheight = round(child->height_fraction * height);
 
 				wlr_scene_node_reparent(child->node.scene_node, ws->tiling_scene);
@@ -428,10 +520,10 @@ static void arrange_workspace (struct sway_workspace *ws, int width, int height)
 				arrange_container(child, width, cheight, true);
 				off += cheight;
 			}
-		} else if (ws->current.layout == L_HORIZ) {
+		} else if (ws->layout == L_HORIZ) {
 			int off = 0;
-			for (int i = 0; i < ws->current.tiling->length; i++) {
-				struct sway_container *child = ws->current.tiling->items[i];
+			for (int i = 0; i < ws->tiling->length; i++) {
+				struct sway_container *child = ws->tiling->items[i];
 				int cwidth = round(child->width_fraction * width);
 
 				wlr_scene_node_reparent(child->node.scene_node, ws->tiling_scene);
@@ -443,21 +535,23 @@ static void arrange_workspace (struct sway_workspace *ws, int width, int height)
 			}
 		}
 
-		for (int i = 0; i < ws->current.floating->length; i++) {
-			struct sway_container *child = ws->current.floating->items[i];
+		for (int i = 0; i < ws->floating->length; i++) {
+			struct sway_container *child = ws->floating->items[i];
 
 			wlr_scene_node_reparent(child->node.scene_node, ws->floating_scene);
-			wlr_scene_node_set_position(child->node.scene_node, child->current.x, child->current.x);
-			arrange_container(child, child->current.width, child->current.height, true);
+			wlr_scene_node_set_position(child->node.scene_node, child->pending.x, child->pending.y);
+			arrange_container(child, child->pending.width, child->pending.height, true);
 		}
 	}
 }
 
 static void arrange_output (struct sway_output *output, int width, int height) {
-	for (int i = 0; i < output->current.workspaces->length; i++) {
-		struct sway_workspace *child = output->current.workspaces->items[i];
+	struct sway_workspace *active_workspace = output_get_active_workspace(output);
 
-		bool activated = output->current.active_workspace == child;
+	for (int i = 0; i < output->workspaces->length; i++) {
+		struct sway_workspace *child = output->workspaces->items[i];
+
+		bool activated = active_workspace == child;
 
 		wlr_scene_node_set_enabled(child->node.scene_node, activated);
 		wlr_scene_node_reparent(child->node.scene_node, output->node.scene_node);
@@ -469,11 +563,17 @@ static void arrange_output (struct sway_output *output, int width, int height) {
 	}
 }
 
-static void arrange_root (struct sway_root *root, int width, int height) {
+void arrange_root (void) {
 	for (int i = 0; i < root->outputs->length; i++) {
 		struct sway_output *output = root->outputs->items[i];
 
-		arrange_output(output, output->width, output->height);
+		struct wlr_box output_box;
+		wlr_output_layout_get_box(root->output_layout,
+			output->wlr_output, &output_box);
+
+		printf("%i %i\n", output_box.width, output_box.height);
+
+		arrange_output(output, output_box.width, output_box.height);
 	}
 }
 
@@ -526,11 +626,10 @@ static void transaction_progress(void) {
 	if (!server.queued_transaction) {
 		return;
 	}
-	if (server.queued_transaction->num_waiting > 0) {
+	if (true || server.queued_transaction->num_waiting > 0) {
 		return;
 	}
 	transaction_apply(server.queued_transaction);
-	arrange_root(root, 0, 0);
 	transaction_destroy(server.queued_transaction);
 	server.queued_transaction = NULL;
 
@@ -713,7 +812,9 @@ void transaction_notify_view_ready_by_geometry(struct sway_view *view,
 }
 
 static void _transaction_commit_dirty(bool server_request) {
-	if (!server.dirty_nodes->length) {
+	arrange_root();
+
+	if (true || !server.dirty_nodes->length) {
 		return;
 	}
 
@@ -730,7 +831,6 @@ static void _transaction_commit_dirty(bool server_request) {
 		node->dirty = false;
 	}
 	server.dirty_nodes->length = 0;
-
 	transaction_commit_pending();
 }
 

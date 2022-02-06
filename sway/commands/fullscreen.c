@@ -2,7 +2,6 @@
 #include "log.h"
 #include "sway/commands.h"
 #include "sway/config.h"
-#include "sway/tree/arrange.h"
 #include "sway/tree/container.h"
 #include "sway/tree/view.h"
 #include "sway/tree/workspace.h"
@@ -52,7 +51,6 @@ struct cmd_results *cmd_fullscreen(int argc, char **argv) {
 	}
 
 	container_set_fullscreen(container, mode);
-	arrange_root();
 
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }

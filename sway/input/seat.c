@@ -27,7 +27,6 @@
 #include "sway/layers.h"
 #include "sway/output.h"
 #include "sway/server.h"
-#include "sway/tree/arrange.h"
 #include "sway/tree/container.h"
 #include "sway/tree/root.h"
 #include "sway/tree/view.h"
@@ -1233,12 +1232,6 @@ void seat_set_focus(struct sway_seat *seat, struct sway_node *node) {
 	}
 
 	seat->has_focus = true;
-
-	if (config->smart_gaps && new_workspace) {
-		// When smart gaps is on, gaps may change when the focus changes so
-		// the workspace needs to be arranged
-		arrange_workspace(new_workspace);
-	}
 }
 
 void seat_set_focus_container(struct sway_seat *seat,
@@ -1296,10 +1289,6 @@ void seat_set_exclusive_client(struct sway_seat *seat,
 		seat->exclusive_client = client;
 		// Triggers a refocus of the topmost surface layer if necessary
 		// TODO: Make layer surface focus per-output based on cursor position
-		for (int i = 0; i < root->outputs->length; ++i) {
-			struct sway_output *output = root->outputs->items[i];
-			arrange_layers(output);
-		}
 		return;
 	}
 	if (seat->focused_layer) {

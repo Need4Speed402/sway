@@ -21,7 +21,6 @@
 #include "sway/ipc-server.h"
 #include "sway/output.h"
 #include "sway/server.h"
-#include "sway/tree/arrange.h"
 #include "sway/tree/view.h"
 #include "sway/tree/workspace.h"
 #include "sway/xdg_decoration.h"
@@ -924,8 +923,6 @@ void container_floating_move_to(struct sway_container *con,
 	if (new_workspace && old_workspace != new_workspace) {
 		container_detach(con);
 		workspace_add_floating(new_workspace, con);
-		arrange_workspace(old_workspace);
-		arrange_workspace(new_workspace);
 		workspace_detect_urgent(old_workspace);
 		workspace_detect_urgent(new_workspace);
 	}
@@ -1332,8 +1329,6 @@ void container_handle_fullscreen_reparent(struct sway_container *con) {
 		container_fullscreen_disable(con->pending.workspace->fullscreen);
 	}
 	con->pending.workspace->fullscreen = con;
-
-	arrange_workspace(con->pending.workspace);
 }
 
 static void set_workspace(struct sway_container *container, void *data) {

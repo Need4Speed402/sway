@@ -2,7 +2,6 @@
 #include <strings.h>
 #include "sway/commands.h"
 #include "sway/config.h"
-#include "sway/tree/arrange.h"
 #include "sway/tree/workspace.h"
 #include "log.h"
 #include "stringop.h"
@@ -133,7 +132,6 @@ static void configure_gaps(struct sway_workspace *ws, void *_data) {
 		ws->gaps_inner = 0;
 	}
 	prevent_invalid_outer_gaps();
-	arrange_workspace(ws);
 }
 
 // gaps inner|outer|horizontal|vertical|top|right|bottom|left current|all

@@ -7,7 +7,6 @@
 #include "sway/input/cursor.h"
 #include "sway/input/seat.h"
 #include "sway/output.h"
-#include "sway/tree/arrange.h"
 #include "sway/tree/root.h"
 #include "sway/tree/view.h"
 #include "sway/tree/workspace.h"
@@ -387,7 +386,6 @@ struct cmd_results *cmd_focus(int argc, char **argv) {
 		struct sway_container *obstructing = container_obstructing_fullscreen_container(container);
 		if (obstructing) {
 			container_fullscreen_disable(obstructing);
-			arrange_root();
 		}
 		seat_set_focus_container(seat, container);
 		seat_consider_warp_to_focus(seat);

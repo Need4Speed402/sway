@@ -3,7 +3,6 @@
 #include "sway/config.h"
 #include "sway/input/cursor.h"
 #include "sway/input/input-manager.h"
-#include "sway/tree/arrange.h"
 #include "sway/tree/container.h"
 #include "sway/tree/view.h"
 
@@ -94,8 +93,6 @@ struct cmd_results *cmd_border(int argc, char **argv) {
 	if (container_is_floating(container)) {
 		container_set_geometry_from_content(container);
 	}
-
-	arrange_container(container);
 
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }

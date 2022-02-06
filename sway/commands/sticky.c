@@ -4,7 +4,6 @@
 #include "sway/input/seat.h"
 #include "sway/ipc-server.h"
 #include "sway/output.h"
-#include "sway/tree/arrange.h"
 #include "sway/tree/container.h"
 #include "sway/tree/view.h"
 #include "sway/tree/workspace.h"
@@ -40,7 +39,6 @@ struct cmd_results *cmd_sticky(int argc, char **argv) {
 			container_detach(container);
 			workspace_add_floating(active_workspace, container);
 			container_handle_fullscreen_reparent(container);
-			arrange_workspace(active_workspace);
 			workspace_consider_destroy(old_workspace);
 		}
 	}
