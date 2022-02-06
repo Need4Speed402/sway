@@ -234,14 +234,22 @@ static void apply_output_state(struct sway_output *output,
 static void apply_workspace_state(struct sway_workspace *ws,
 		struct sway_workspace_state *state) {
 	list_free(ws->current.floating);
+
+	if (ws->current.fullscreen && ws->current.fullscreen->view) {
+		wlr_scene_node_reparent(ws->current.fullscreen->view->scene_node, ws->current.fullscreen->content.node);
+	}
+
 	memcpy(&ws->current, state, sizeof(struct sway_workspace_state));
+
+	wlr_scene_node_set_enabled(ws->tiling_scene, !ws->current.fullscreen);	
+	wlr_scene_node_set_enabled(ws->floating_scene, !ws->current.fullscreen);	
 
 	if (ws->current.layout == L_VERT) {
 		double off = 0;
 		for (int i = 0; i < ws->current.tiling->length; i++) {
 			struct sway_container *child = ws->current.tiling->items[i];
 
-			wlr_scene_node_reparent(child->node.scene_node, ws->node.scene_node);
+			wlr_scene_node_reparent(child->node.scene_node, ws->tiling_scene);
 			wlr_scene_node_set_enabled(child->content.node, true);
 			wlr_scene_node_set_position(child->node.scene_node, 0, round(off * ws->current.height));
 			off += child->height_fraction;
@@ -251,7 +259,7 @@ static void apply_workspace_state(struct sway_workspace *ws,
 		for (int i = 0; i < ws->current.tiling->length; i++) {
 			struct sway_container *child = ws->current.tiling->items[i];
 
-			wlr_scene_node_reparent(child->node.scene_node, ws->node.scene_node);
+			wlr_scene_node_reparent(child->node.scene_node, ws->tiling_scene);
 			wlr_scene_node_set_enabled(child->content.node, true);
 			wlr_scene_node_set_position(child->node.scene_node, round(off * ws->current.width), 0);
 			off += child->width_fraction;
@@ -261,7 +269,16 @@ static void apply_workspace_state(struct sway_workspace *ws,
 	for (int i = 0; i < ws->current.floating->length; i++) {
 		struct sway_container *child = ws->current.floating->items[i];
 
-		wlr_scene_node_reparent(child->node.scene_node, ws->node.scene_node);
+		wlr_scene_node_reparent(child->node.scene_node, ws->floating_scene);
+	}
+
+	struct sway_container *fs = ws->current.fullscreen;
+	if (fs) {
+		if (fs->view) {
+			wlr_scene_node_reparent(fs->view->scene_node, ws->node.scene_node);
+		}else{
+			wlr_scene_node_reparent(ws->current.fullscreen->node.scene_node, ws->node.scene_node);
+		}
 	}
 }
 
@@ -358,27 +375,24 @@ static void apply_container_state(struct sway_container *container,
 			off += child->width_fraction;
 		}
 	} else {
-		//wlr_scene_node_set_enabled(container->title_bar.node, container->current.border_top);
-		wlr_scene_node_set_enabled(&container->content.border_bottom->node, container->current.border_bottom);
-		wlr_scene_node_set_enabled(&container->content.border_left->node, container->current.border_left);
-		wlr_scene_node_set_enabled(&container->content.border_right->node, container->current.border_right);
+		if (container->view) {
+			int border_width = container->current.border_thickness;
 
-		int border_width = container->current.border_thickness;
+			wlr_scene_rect_set_size(container->content.border_bottom,
+				container->current.width, border_width);
+			wlr_scene_rect_set_size(container->content.border_left,
+				border_width, container->current.height - border_width - title_bar_height);
+			wlr_scene_rect_set_size(container->content.border_right,
+				border_width, container->current.height - border_width - title_bar_height);
 
-		wlr_scene_rect_set_size(container->content.border_bottom,
-			container->current.width, border_width);
-		wlr_scene_rect_set_size(container->content.border_left,
-			border_width, container->current.height - border_width - title_bar_height);
-		wlr_scene_rect_set_size(container->content.border_right,
-			border_width, container->current.height - border_width - title_bar_height);
+			wlr_scene_node_set_position(&container->content.border_bottom->node, -border_width,
+				container->current.content_height);
+			wlr_scene_node_set_position(&container->content.border_left->node, -border_width, 0);
+			wlr_scene_node_set_position(&container->content.border_right->node,
+				container->current.content_width, 0);
 
-		wlr_scene_node_set_position(&container->content.border_bottom->node, -border_width,
-			container->current.content_height);
-		wlr_scene_node_set_position(&container->content.border_left->node, -border_width, 0);
-		wlr_scene_node_set_position(&container->content.border_right->node,
-			container->current.content_width, 0);
-
-		content_x = border_width;
+			content_x = border_width;
+		}
 
 		if (container->current.border_top) {
 			layout_title_bar(container, 0, 0, container->current.width, title_bar_height);

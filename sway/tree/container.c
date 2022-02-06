@@ -97,13 +97,15 @@ struct sway_container *container_create(struct sway_view *view) {
 
 	struct wlr_scene_tree *content_tree = wlr_scene_tree_create(c->node.scene_node);
 	c->content.node = &content_tree->node;
-	c->content.border_bottom = wlr_scene_rect_create(c->content.node, 0, 0, (float[4]){0.f, 0.f, 0.f, 1} );
-	c->content.border_left = wlr_scene_rect_create(c->content.node, 0, 0, (float[4]){0.f, 0.f, 0.f, 1} );
-	c->content.border_right = wlr_scene_rect_create(c->content.node, 0, 0, (float[4]){0.f, 0.f, 0.f, 1} );
 
 	if (!view) {
 		c->pending.children = create_list();
 		c->current.children = create_list();
+	}else{
+		//only containers with views can have borders
+		c->content.border_bottom = wlr_scene_rect_create(c->content.node, 0, 0, (float[4]){0.f, 0.f, 0.f, 1} );
+		c->content.border_left = wlr_scene_rect_create(c->content.node, 0, 0, (float[4]){0.f, 0.f, 0.f, 1} );
+		c->content.border_right = wlr_scene_rect_create(c->content.node, 0, 0, (float[4]){0.f, 0.f, 0.f, 1} );
 	}
 	c->marks = create_list();
 	c->outputs = create_list();
@@ -143,9 +145,13 @@ void container_set_focus_state(struct sway_container *con, enum sway_container_f
 
 	wlr_scene_rect_set_color(con->title_bar.border, (const float *) colors->border);
 	wlr_scene_rect_set_color(con->title_bar.background, (const float *) colors->background);
-	wlr_scene_rect_set_color(con->content.border_bottom, bottom);
-	wlr_scene_rect_set_color(con->content.border_left, (const float *) colors->child_border);
-	wlr_scene_rect_set_color(con->content.border_right, right);
+	
+	if (con->view) {
+		wlr_scene_rect_set_color(con->content.border_bottom, bottom);
+		wlr_scene_rect_set_color(con->content.border_left, (const float *) colors->child_border);
+		wlr_scene_rect_set_color(con->content.border_right, right);
+	}
+	
 	container_update_title_textures(con);
 }
 

@@ -22,6 +22,9 @@ struct sway_workspace_state {
 
 struct sway_workspace {
 	struct sway_node node;
+	struct wlr_scene_node *tiling_scene;
+	struct wlr_scene_node *floating_scene;
+
 	struct sway_container *fullscreen;
 
 	char *name;

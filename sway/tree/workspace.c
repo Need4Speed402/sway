@@ -78,6 +78,9 @@ struct sway_workspace *workspace_create(struct sway_output *output,
 	ws->tiling = create_list();
 	ws->output_priority = create_list();
 
+	ws->tiling_scene = &wlr_scene_tree_create(ws->node.scene_node)->node;
+	ws->floating_scene = &wlr_scene_tree_create(ws->node.scene_node)->node;
+
 	ws->gaps_outer = config->gaps_outer;
 	ws->gaps_inner = config->gaps_inner;
 	if (name) {
