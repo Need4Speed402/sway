@@ -14,6 +14,18 @@ struct sway_container;
 struct sway_transaction_instruction;
 struct wlr_box;
 
+enum scene_descriptor_type {
+	DESC_SURFACE,
+	DESC_SWAY_NODE
+};
+
+struct node_descriptor {
+	enum scene_descriptor_type type;
+	void *data;
+};
+
+struct node_descriptor *descriptor_create (enum scene_descriptor_type type, void *data);
+
 enum sway_node_type {
 	N_ROOT,
 	N_OUTPUT,

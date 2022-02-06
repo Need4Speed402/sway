@@ -36,166 +36,42 @@ static uint32_t get_current_time_msec(void) {
 	return now.tv_sec * 1000 + now.tv_nsec / 1000000;
 }
 
-static struct wlr_surface *layer_surface_at(struct sway_output *output,
-		struct wl_list *layer, double ox, double oy, double *sx, double *sy) {
-	struct sway_layer_surface *sway_layer;
-	wl_list_for_each_reverse(sway_layer, layer, link) {
-		double _sx = ox - sway_layer->geo.x;
-		double _sy = oy - sway_layer->geo.y;
-		struct wlr_surface *sub = wlr_layer_surface_v1_surface_at(
-			sway_layer->layer_surface, _sx, _sy, sx, sy);
-		if (sub) {
-			return sub;
-		}
-	}
-	return NULL;
-}
-
-static bool surface_is_xdg_popup(struct wlr_surface *surface) {
-    if (wlr_surface_is_xdg_surface(surface)) {
-        struct wlr_xdg_surface *xdg_surface =
-            wlr_xdg_surface_from_wlr_surface(surface);
-        return xdg_surface->role == WLR_XDG_SURFACE_ROLE_POPUP;
-    }
-    return false;
-}
-
-static struct wlr_surface *layer_surface_popup_at(struct sway_output *output,
-		struct wl_list *layer, double ox, double oy, double *sx, double *sy) {
-	struct sway_layer_surface *sway_layer;
-	wl_list_for_each_reverse(sway_layer, layer, link) {
-		double _sx = ox - sway_layer->geo.x;
-		double _sy = oy - sway_layer->geo.y;
-		struct wlr_surface *sub = wlr_layer_surface_v1_surface_at(
-			sway_layer->layer_surface, _sx, _sy, sx, sy);
-		if (sub && surface_is_xdg_popup(sub)) {
-			return sub;
-		}
-	}
-	return NULL;
-}
-
 /**
  * Returns the node at the cursor's position. If there is a surface at that
  * location, it is stored in **surface (it may not be a view).
  */
 struct sway_node *node_at_coords(
 		struct sway_seat *seat, double lx, double ly,
-		struct wlr_surface **surface, double *sx, double *sy) {
-	// find the output the cursor is on
-	struct wlr_output *wlr_output = wlr_output_layout_output_at(
-			root->output_layout, lx, ly);
-	if (wlr_output == NULL) {
-		return NULL;
-	}
-	struct sway_output *output = wlr_output->data;
-	if (!output || !output->enabled) {
-		// output is being destroyed or is being enabled
-		return NULL;
-	}
-	double ox = lx, oy = ly;
-	wlr_output_layout_output_coords(root->output_layout, wlr_output, &ox, &oy);
+		struct wlr_surface **_surface, double *sx, double *sy) {
 
-	// layer surfaces on the overlay layer are rendered on top
-	if ((*surface = layer_surface_at(output,
-				&output->layers[ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY],
-				ox, oy, sx, sy))) {
-		return NULL;
-	}
+	struct wlr_scene_node *scene_node = wlr_scene_node_at(root->node.scene_node, lx, ly, sx, sy);
+	if (!scene_node) return NULL;
 
-	// check for unmanaged views
-#if HAVE_XWAYLAND
-	struct wl_list *unmanaged = &root->xwayland_unmanaged;
-	struct sway_xwayland_unmanaged *unmanaged_surface;
-	wl_list_for_each_reverse(unmanaged_surface, unmanaged, link) {
-		struct wlr_xwayland_surface *xsurface =
-			unmanaged_surface->wlr_xwayland_surface;
+	struct sway_node *node = NULL;
+	struct wlr_surface *surface = NULL;
 
-		double _sx = lx - unmanaged_surface->lx;
-		double _sy = ly - unmanaged_surface->ly;
-		if (wlr_surface_point_accepts_input(xsurface->surface, _sx, _sy)) {
-			*surface = xsurface->surface;
-			*sx = _sx;
-			*sy = _sy;
-			return NULL;
-		}
-	}
-#endif
-
-	if (root->fullscreen_global) {
-		// Try fullscreen container
-		struct sway_container *con = tiling_container_at(
-				&root->fullscreen_global->node, lx, ly, surface, sx, sy);
-		if (con) {
-			return &con->node;
-		}
-		return NULL;
-	}
-
-	// find the focused workspace on the output for this seat
-	struct sway_workspace *ws = output_get_active_workspace(output);
-	if (!ws) {
-		return NULL;
-	}
-
-	if (ws->fullscreen) {
-		// Try transient containers
-		for (int i = 0; i < ws->floating->length; ++i) {
-			struct sway_container *floater = ws->floating->items[i];
-			if (container_is_transient_for(floater, ws->fullscreen)) {
-				struct sway_container *con = tiling_container_at(
-						&floater->node, lx, ly, surface, sx, sy);
-				if (con) {
-					return &con->node;
+	{
+		struct wlr_scene_node *current = scene_node;
+		while (current) {
+			if (current->data) {
+				struct node_descriptor *desc = current->data;
+				if (!node && desc->type == DESC_SWAY_NODE) {
+					node = desc->data;
+				} else if (!surface && desc->type == DESC_SURFACE) {
+					struct sway_view *view = desc->data;
+					
+					surface = wlr_xdg_surface_surface_at(
+						view->wlr_xdg_surface,
+						*sx, *sy, sx, sy);
 				}
 			}
+
+			current = current->parent;
 		}
-		// Try fullscreen container
-		struct sway_container *con =
-			tiling_container_at(&ws->fullscreen->node, lx, ly, surface, sx, sy);
-		if (con) {
-			return &con->node;
-		}
-		return NULL;
-	}
-	if ((*surface = layer_surface_popup_at(output,
-				&output->layers[ZWLR_LAYER_SHELL_V1_LAYER_TOP],
-				ox, oy, sx, sy))) {
-		return NULL;
-	}
-	if ((*surface = layer_surface_popup_at(output,
-				&output->layers[ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM],
-				ox, oy, sx, sy))) {
-		return NULL;
-	}
-	if ((*surface = layer_surface_popup_at(output,
-				&output->layers[ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND],
-				ox, oy, sx, sy))) {
-		return NULL;
-	}
-	if ((*surface = layer_surface_at(output,
-				&output->layers[ZWLR_LAYER_SHELL_V1_LAYER_TOP],
-				ox, oy, sx, sy))) {
-		return NULL;
 	}
 
-	struct sway_container *c;
-	if ((c = container_at(ws, lx, ly, surface, sx, sy))) {
-		return &c->node;
-	}
-
-	if ((*surface = layer_surface_at(output,
-				&output->layers[ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM],
-				ox, oy, sx, sy))) {
-		return NULL;
-	}
-	if ((*surface = layer_surface_at(output,
-				&output->layers[ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND],
-				ox, oy, sx, sy))) {
-		return NULL;
-	}
-
-	return &ws->node;
+	*_surface = surface;
+	return node;
 }
 
 void cursor_rebase(struct sway_cursor *cursor) {

@@ -44,6 +44,7 @@ void view_init(struct sway_view *view, enum sway_view_type type,
 
 	view->wlr_xdg_surface = xdg_surface;
 	view->scene_node = wlr_scene_xdg_surface_create(&root->staging->node, xdg_surface);
+	view->scene_node->data = descriptor_create(DESC_SURFACE, view);
 }
 
 void view_destroy(struct sway_view *view) {

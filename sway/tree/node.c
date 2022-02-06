@@ -7,12 +7,20 @@
 #include "sway/tree/workspace.h"
 #include "log.h"
 
+struct node_descriptor *descriptor_create (enum scene_descriptor_type type, void *data) {
+	struct node_descriptor *desc = malloc(sizeof(struct node_descriptor));
+	desc->type = type;
+	desc->data = data;
+	return desc;
+};
+
 void node_init(struct sway_node *node, struct wlr_scene_node *scene_node, enum sway_node_type type, void *thing) {
 	static size_t next_id = 1;
 	node->id = next_id++;
 	node->type = type;
 	node->sway_root = thing;
 	node->scene_node = scene_node;
+	scene_node->data = descriptor_create(DESC_SWAY_NODE, node);
 
 	wl_signal_init(&node->events.destroy);
 }
