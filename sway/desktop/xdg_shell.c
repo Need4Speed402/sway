@@ -277,6 +277,30 @@ static const struct sway_view_impl view_impl = {
 };
 
 static void handle_commit(struct wl_listener *listener, void *data) {
+	struct sway_xdg_shell_view *xdg_shell_view =
+		wl_container_of(listener, xdg_shell_view, commit);
+	struct sway_view *view = &xdg_shell_view->view;
+	struct wlr_xdg_surface *xdg_surface = view->wlr_xdg_surface;
+
+	struct wlr_box new_geo;
+	wlr_xdg_surface_get_geometry(xdg_surface, &new_geo);
+	bool new_size = new_geo.width != view->geometry.width ||
+			new_geo.height != view->geometry.height ||
+			new_geo.x != view->geometry.x ||
+			new_geo.y != view->geometry.y;
+
+	if (new_size) {
+		memcpy(&view->geometry, &new_geo, sizeof(struct wlr_box));
+		if (container_is_floating(view->container)) {
+			view_update_size(view);
+			transaction_commit_dirty_client();
+		} 
+	}
+
+	if (view->container->node.instruction) {
+		transaction_notify_view_ready_by_serial(view,
+				xdg_surface->current.configure_serial);
+	}
 }
 
 static void handle_set_title(struct wl_listener *listener, void *data) {
