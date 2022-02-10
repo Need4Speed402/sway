@@ -103,11 +103,6 @@ struct sway_output *output_create(struct wlr_output *wlr_output) {
 	output->workspaces = create_list();
 	output->current.workspaces = create_list();
 
-	size_t len = sizeof(output->layers) / sizeof(output->layers[0]);
-	for (size_t i = 0; i < len; ++i) {
-		wl_list_init(&output->layers[i]);
-	}
-
 	return output;
 }
 
@@ -380,10 +375,8 @@ void output_sort_workspaces(struct sway_output *output) {
 }
 
 void output_get_box(struct sway_output *output, struct wlr_box *box) {
-	box->x = output->lx;
-	box->y = output->ly;
-	box->width = output->width;
-	box->height = output->height;
+	wlr_output_layout_get_box(root->output_layout,
+			output->wlr_output, box);
 }
 
 enum sway_container_layout output_get_default_layout(

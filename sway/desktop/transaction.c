@@ -84,182 +84,9 @@ static void transaction_destroy(struct sway_transaction *transaction) {
 	free(transaction);
 }
 
-static void copy_output_state(struct sway_output *output,
-		struct sway_transaction_instruction *instruction) {
-	struct sway_output_state *state = &instruction->output_state;
-	if (state->workspaces) {
-		state->workspaces->length = 0;
-	} else {
-		state->workspaces = create_list();
-	}
-	list_cat(state->workspaces, output->workspaces);
-
-	state->active_workspace = output_get_active_workspace(output);
-}
-
-static void copy_workspace_state(struct sway_workspace *ws,
-		struct sway_transaction_instruction *instruction) {
-	struct sway_workspace_state *state = &instruction->workspace_state;
-
-	state->fullscreen = ws->fullscreen;
-	state->x = ws->x;
-	state->y = ws->y;
-	state->width = ws->width;
-	state->height = ws->height;
-	state->layout = ws->layout;
-
-	state->output = ws->output;
-	if (state->floating) {
-		state->floating->length = 0;
-	} else {
-		state->floating = create_list();
-	}
-	if (state->tiling) {
-		state->tiling->length = 0;
-	} else {
-		state->tiling = create_list();
-	}
-	list_cat(state->floating, ws->floating);
-	list_cat(state->tiling, ws->tiling);
-
-	struct sway_seat *seat = input_manager_current_seat();
-	state->focused = seat_get_focus(seat) == &ws->node;
-
-	// Set focused_inactive_child to the direct tiling child
-	struct sway_container *focus = seat_get_focus_inactive_tiling(seat, ws);
-	if (focus) {
-		while (focus->pending.parent) {
-			focus = focus->pending.parent;
-		}
-	}
-	state->focused_inactive_child = focus;
-}
-
-static void copy_container_state(struct sway_container *container,
-		struct sway_transaction_instruction *instruction) {
-	struct sway_container_state *state = &instruction->container_state;
-
-	if (state->children) {
-		list_free(state->children);
-	}
-
-	memcpy(state, &container->pending, sizeof(struct sway_container_state));
-
-	if (!container->view) {
-		// We store a copy of the child list to avoid having it mutated after
-		// we copy the state.
-
-		state->children = create_list();
-		list_cat(state->children, container->pending.children);
-	} else {
-		state->children = NULL;
-	}
-
-
-	
-}
-
-static void transaction_add_node(struct sway_transaction *transaction,
-		struct sway_node *node, bool server_request) {
-	struct sway_transaction_instruction *instruction = NULL;
-
-	// Check if we have an instruction for this node already, in which case we
-	// update that instead of creating a new one.
-	if (node->ntxnrefs > 0) {
-		for (int idx = 0; idx < transaction->instructions->length; idx++) {
-			struct sway_transaction_instruction *other =
-				transaction->instructions->items[idx];
-			if (other->node == node) {
-				instruction = other;
-				break;
-			}
-		}
-	}
-
-	if (!instruction) {
-		instruction = calloc(1, sizeof(struct sway_transaction_instruction));
-		if (!sway_assert(instruction, "Unable to allocate instruction")) {
-			return;
-		}
-		instruction->transaction = transaction;
-		instruction->node = node;
-		instruction->server_request = server_request;
-
-		list_add(transaction->instructions, instruction);
-		node->ntxnrefs++;
-	} else if (server_request) {
-		instruction->server_request = true;
-	}
-
-	switch (node->type) {
-	case N_ROOT:
-		break;
-	case N_OUTPUT:
-		copy_output_state(node->sway_output, instruction);
-		break;
-	case N_WORKSPACE:
-		copy_workspace_state(node->sway_workspace, instruction);
-		break;
-	case N_CONTAINER:
-		copy_container_state(node->sway_container, instruction);
-		break;
-	}
-}
-
-static void apply_output_state(struct sway_output *output,
-		struct sway_output_state *state) {
-	list_free(output->current.workspaces);
-	memcpy(&output->current, state, sizeof(struct sway_output_state));
-
-}
-
-static void apply_workspace_state(struct sway_workspace *ws,
-		struct sway_workspace_state *state) {
-	list_free(ws->current.floating);
-
-	memcpy(&ws->current, state, sizeof(struct sway_workspace_state));
-
-}
-
-static void apply_container_state(struct sway_container *container,
-		struct sway_container_state *state) {
-	struct sway_view *view = container->view;
-	// There are separate children lists for each instruction state, the
-	// container's current state and the container's pending state
-	// (ie. con->children). The list itself needs to be freed here.
-	// Any child containers which are being deleted will be cleaned up in
-	// transaction_destroy().
-	list_free(container->current.children);
-
-	memcpy(&container->current, state, sizeof(struct sway_container_state));
-
-	if (container_is_current_floating(container)) {
-		wlr_scene_node_set_position(container->node.scene_node, container->current.x, container->current.y);
-	}
-
-	if (view) {
-		if (!wl_list_empty(&view->saved_buffers)) {
-			if (!container->node.destroying || container->node.ntxnrefs == 1) {
-				view_remove_saved_buffer(view);
-			}
-		}
-
-		// If the view hasn't responded to the configure, center it within
-		// the container. This is important for fullscreen views which
-		// refuse to resize to the size of the output.
-		if (view->surface) {
-			view_center_surface(view);
-		}
-	}
-
-	if (!container->node.destroying) {
-		container_discover_outputs(container);
-	}
-}
-
 static void normalize_fractions(list_t *children) {
 	if (!children) return;
-	
+
 	{
 		// Count the number of new windows we are resizing, and how much space
 		// is currently occupied
@@ -356,8 +183,8 @@ static void layout_title_bar(struct sway_container *con,
 	}
 
 	if (con->current.workspace) {
-		list_t *siblings = container_get_current_siblings(con);
-		enum sway_container_layout layout = container_current_parent_layout(con);
+		list_t *siblings = container_get_siblings(con);
+		enum sway_container_layout layout = container_parent_layout(con);
 
 		if (siblings->length == 1) {
 			if (layout == L_VERT) {
@@ -388,16 +215,16 @@ static void arrange_container (struct sway_container *con, int width, int height
 	int content_x = 0, content_y = 0;
 	int title_bar_height = container_titlebar_height();
 
-	normalize_fractions(con->pending.children);
+	normalize_fractions(con->children);
 
-	if (con->pending.layout == L_TABBED) {
+	if (con->layout == L_TABBED) {
 		wlr_scene_node_set_enabled(con->title_bar.node, true);
 		content_y = title_bar_height;
 
-		double w = (double) width / con->pending.children->length;
-		for (int i = 0; i < con->pending.children->length; i++) {
-			struct sway_container *child = con->pending.children->items[i];
-			bool activated = child == con->pending.focused_inactive_child;
+		double w = (double) width / con->children->length;
+		for (int i = 0; i < con->children->length; i++) {
+			struct sway_container *child = con->children->items[i];
+			bool activated = child == con->focused_inactive_child;
 
 			layout_title_bar(child, w * i, -content_y, w, content_y);
 			wlr_scene_node_set_enabled(child->content.node, activated);
@@ -408,14 +235,14 @@ static void arrange_container (struct sway_container *con, int width, int height
 				arrange_container(child, width, height - title_bar_height, false);
 			}
 		}
-	} else if (con->pending.layout == L_STACKED) {
+	} else if (con->layout == L_STACKED) {
 		wlr_scene_node_set_enabled(con->title_bar.node, true);
-		content_y = title_bar_height * con->pending.children->length;
+		content_y = title_bar_height * con->children->length;
 
 		int y = 0;
-		for (int i = 0; i < con->pending.children->length; i++) {
-			struct sway_container *child = con->pending.children->items[i];
-			bool activated = child == con->pending.focused_inactive_child;
+		for (int i = 0; i < con->children->length; i++) {
+			struct sway_container *child = con->children->items[i];
+			bool activated = child == con->focused_inactive_child;
 
 			layout_title_bar(child, 0, y - content_y, width, title_bar_height);
 			wlr_scene_node_set_enabled(child->content.node, activated);
@@ -428,10 +255,10 @@ static void arrange_container (struct sway_container *con, int width, int height
 
 			y += title_bar_height;
 		}
-	} else if (con->pending.layout == L_VERT) {
+	} else if (con->layout == L_VERT) {
 		int off = 0;
-		for (int i = 0; i < con->pending.children->length; i++) {
-			struct sway_container *child = con->pending.children->items[i];
+		for (int i = 0; i < con->children->length; i++) {
+			struct sway_container *child = con->children->items[i];
 			int cheight = round(child->height_fraction * height);
 
 			wlr_scene_node_set_enabled(child->content.node, true);
@@ -440,10 +267,10 @@ static void arrange_container (struct sway_container *con, int width, int height
 			arrange_container(child, width, cheight, true);
 			off += cheight;
 		}
-	} else if (con->pending.layout == L_HORIZ) {
+	} else if (con->layout == L_HORIZ) {
 		int off = 0;
-		for (int i = 0; i < con->pending.children->length; i++) {
-			struct sway_container *child = con->pending.children->items[i];
+		for (int i = 0; i < con->children->length; i++) {
+			struct sway_container *child = con->children->items[i];
 			int cwidth = round(child->width_fraction * width);
 
 			wlr_scene_node_set_enabled(child->content.node, true);
@@ -456,7 +283,7 @@ static void arrange_container (struct sway_container *con, int width, int height
 		title_bar_height *= title_bar;
 
 		if (con->view) {
-			int border_width = con->pending.border_thickness;
+			int border_width = con->border_thickness;
 
 			wlr_scene_rect_set_size(con->content.border_bottom, width, border_width);
 			wlr_scene_rect_set_size(con->content.border_left,
@@ -539,8 +366,8 @@ static void arrange_workspace (struct sway_workspace *ws, int width, int height)
 			struct sway_container *child = ws->floating->items[i];
 
 			wlr_scene_node_reparent(child->node.scene_node, ws->floating_scene);
-			wlr_scene_node_set_position(child->node.scene_node, child->pending.x, child->pending.y);
-			arrange_container(child, child->pending.width, child->pending.height, true);
+			wlr_scene_node_set_position(child->node.scene_node, child->x, child->y);
+			arrange_container(child, child->width, child->height, true);
 		}
 	}
 }
@@ -577,49 +404,6 @@ void arrange_root (void) {
 	}
 }
 
-/**
- * Apply a transaction to the "current" state of the tree.
- */
-static void transaction_apply(struct sway_transaction *transaction) {
-	sway_log(SWAY_DEBUG, "Applying transaction %p", transaction);
-	if (debug.txn_timings) {
-		struct timespec now;
-		clock_gettime(CLOCK_MONOTONIC, &now);
-		struct timespec *commit = &transaction->commit_time;
-		float ms = (now.tv_sec - commit->tv_sec) * 1000 +
-			(now.tv_nsec - commit->tv_nsec) / 1000000.0;
-		sway_log(SWAY_DEBUG, "Transaction %p: %.1fms waiting "
-				"(%.1f frames if 60Hz)", transaction, ms, ms / (1000.0f / 60));
-	}
-
-	// Apply the instruction state to the node's current state
-	for (int i = 0; i < transaction->instructions->length; ++i) {
-		struct sway_transaction_instruction *instruction =
-			transaction->instructions->items[i];
-		struct sway_node *node = instruction->node;
-
-		switch (node->type) {
-		case N_ROOT:
-			break;
-		case N_OUTPUT:
-			apply_output_state(node->sway_output, &instruction->output_state);
-			break;
-		case N_WORKSPACE:
-			apply_workspace_state(node->sway_workspace,
-					&instruction->workspace_state);
-			break;
-		case N_CONTAINER:
-			apply_container_state(node->sway_container,
-					&instruction->container_state);
-			break;
-		}
-
-		node->instruction = NULL;
-	}
-
-	cursor_rebase_all();
-}
-
 static void transaction_commit_pending(void);
 
 static void transaction_progress(void) {
@@ -629,7 +413,6 @@ static void transaction_progress(void) {
 	if (true || server.queued_transaction->num_waiting > 0) {
 		return;
 	}
-	transaction_apply(server.queued_transaction);
 	transaction_destroy(server.queued_transaction);
 	server.queued_transaction = NULL;
 

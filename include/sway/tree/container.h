@@ -46,33 +46,6 @@ struct sway_view;
 
 enum wlr_direction;
 
-struct sway_container_state {
-	// Container properties
-	enum sway_container_layout layout;
-	double x, y;
-	double width, height;
-
-	enum sway_fullscreen_mode fullscreen_mode;
-	enum sway_container_focus_state focus_state;
-
-	struct sway_workspace *workspace; // NULL when hidden in the scratchpad
-	struct sway_container *parent;    // NULL if container in root of workspace
-	list_t *children;                 // struct sway_container
-
-	struct sway_container *focused_inactive_child;
-
-	enum sway_container_border border;
-	int border_thickness;
-	bool border_top;
-	bool border_bottom;
-	bool border_left;
-	bool border_right;
-
-	// These are in layout coordinates.
-	double content_x, content_y;
-	double content_width, content_height;
-};
-
 struct my_buffer {
 	struct wlr_buffer base;
 	void *data;
@@ -85,7 +58,6 @@ struct my_buffer {
 struct sway_container {
 	struct sway_node node;
 	struct sway_view *view;
-	
 
 	struct {
 		struct wlr_scene_node *node;
@@ -105,8 +77,29 @@ struct sway_container {
 		struct wlr_scene_rect *border_right;
 	} content;
 
-	struct sway_container_state current;
-	struct sway_container_state pending;
+	// Container properties
+	enum sway_container_layout layout;
+
+	enum sway_fullscreen_mode fullscreen_mode;
+	enum sway_container_focus_state focus_state;
+
+	struct sway_workspace *workspace; // NULL when hidden in the scratchpad
+	struct sway_container *parent;    // NULL if container in root of
+	workspace list_t *children;                 // struct sway_container
+
+	struct sway_container *focused_inactive_child;
+
+	enum sway_container_border border;
+	int border_thickness;
+	bool border_top;
+	bool border_bottom;
+	bool border_left;
+	bool border_right;
+
+	struct {
+		int x, y;
+		int width, height;
+	} float_coords;
 
 	char *title;           // The view's title (unformatted)
 	char *formatted_title; // The title displayed in the title bar
@@ -118,12 +111,6 @@ struct sway_container {
 	// `container_is_sticky_[or_child]` rather than accessing this field
 	// directly; it'll also check that the container is floating.
 	bool is_sticky;
-
-	// For C_ROOT, this has no meaning
-	// For other types, this is the position in layout coordinates
-	// Includes borders
-	double saved_x, saved_y;
-	double saved_width, saved_height;
 
 	// Used when the view changes to CSD unexpectedly. This will be a non-B_CSD
 	// border which we use to restore when the view returns to SSD.
@@ -227,11 +214,6 @@ void container_set_geometry_from_content(struct sway_container *con);
 bool container_is_floating(struct sway_container *container);
 
 /**
- * Same as above, but for current container state.
- */
-bool container_is_current_floating(struct sway_container *container);
-
-/**
  * Get a container's box in layout coordinates.
  */
 void container_get_box(struct sway_container *container, struct wlr_box *box);
@@ -300,18 +282,11 @@ bool container_is_fullscreen_or_child(struct sway_container *container);
  */
 struct sway_output *container_get_effective_output(struct sway_container *con);
 
-void container_discover_outputs(struct sway_container *con);
-
 enum sway_container_layout container_parent_layout(struct sway_container *con);
-
-enum sway_container_layout container_current_parent_layout(
-		struct sway_container *con);
 
 list_t *container_get_siblings(struct sway_container *container);
 
 int container_sibling_index(struct sway_container *child);
-
-list_t *container_get_current_siblings(struct sway_container *container);
 
 void container_handle_fullscreen_reparent(struct sway_container *con);
 

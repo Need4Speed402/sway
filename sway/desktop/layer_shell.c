@@ -24,7 +24,7 @@ static struct sway_layer_surface *find_mapped_layer_by_client(
 			continue;
 		}
 		// For now we'll only check the overlay layer
-		struct sway_layer_surface *lsurface;
+		/*struct sway_layer_surface *lsurface;
 		wl_list_for_each(lsurface,
 				&output->layers[ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY], link) {
 			struct wl_resource *resource = lsurface->layer_surface->resource;
@@ -32,7 +32,7 @@ static struct sway_layer_surface *find_mapped_layer_by_client(
 					&& lsurface->layer_surface->mapped) {
 				return lsurface;
 			}
-		}
+		}*/
 	}
 	return NULL;
 }
@@ -392,8 +392,10 @@ void handle_layer_shell_surface(struct wl_listener *listener, void *data) {
 	sway_layer->output_destroy.notify = handle_output_destroy;
 	wl_signal_add(&output->events.disable, &sway_layer->output_destroy);
 
+	/*
 	wl_list_insert(&output->layers[layer_surface->pending.layer],
 			&sway_layer->link);
+	*/
 
 	// Temporarily set the layer's current state to pending
 	// So that we can easily arrange it
