@@ -7,6 +7,7 @@ sway_sources = files(
 	'ipc-server.c',
 	'lock.c',
 	'main.c',
+	'scene_descriptor.c',
 	'server.c',
 	'swaynag.c',
 	'xdg_activation_v1.c',
