@@ -219,6 +219,15 @@ static void send_frame_done_iterator(struct wlr_surface *surface,
 		int x, int y, void *user_data) {
 	int view_max_render_time = 0;
 
+	if (wlr_surface_is_xdg_surface(surface)) {
+		struct wlr_xdg_surface *xdg_surface = wlr_xdg_surface_from_wlr_surface(surface);
+		struct sway_xdg_shell_view *shell_view = xdg_surface->data;
+
+		if (shell_view) {
+			view_max_render_time = shell_view->view.max_render_time;
+		}
+	}
+
 	struct send_frame_done_data *data = user_data;
 	struct sway_output *output = data->output;
 

@@ -122,8 +122,6 @@ struct sway_view {
 		struct wl_signal unmap;
 	} events;
 
-	struct wl_listener surface_new_subsurface;
-
 	int max_render_time; // In milliseconds
 
 	enum seat_config_shortcuts_inhibit shortcuts_inhibit;
@@ -187,7 +185,6 @@ struct sway_xwayland_unmanaged {
 struct sway_view_child;
 
 struct sway_view_child_impl {
-	void (*get_view_coords)(struct sway_view_child *child, int *sx, int *sy);
 	void (*destroy)(struct sway_view_child *child);
 };
 
@@ -202,20 +199,9 @@ struct sway_view_child {
 	struct sway_view_child *parent;
 	struct wl_list children; // sway_view_child::link
 	struct wlr_surface *surface;
-	bool mapped;
 
-	struct wl_listener surface_commit;
-	struct wl_listener surface_new_subsurface;
-	struct wl_listener surface_map;
-	struct wl_listener surface_unmap;
-	struct wl_listener surface_destroy;
-	struct wl_listener view_unmap;
-};
-
-struct sway_subsurface {
-	struct sway_view_child child;
-
-	struct wl_listener destroy;
+	struct wlr_scene_node *scene_node;
+	struct wlr_scene_node *xdg_surface_node;
 };
 
 struct sway_xdg_popup {
