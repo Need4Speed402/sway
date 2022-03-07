@@ -46,7 +46,6 @@ bool view_init(struct sway_view *view, enum sway_view_type type,
 	view->type = type;
 	view->impl = impl;
 	view->executed_criteria = create_list();
-	wl_list_init(&view->saved_buffers);
 	view->allow_request_urgent = true;
 	view->shortcuts_inhibit = SHORTCUTS_INHIBIT_DEFAULT;
 
@@ -68,9 +67,6 @@ void view_destroy(struct sway_view *view) {
 		return;
 	}
 	wl_list_remove(&view->events.unmap.listener_list);
-	if (!wl_list_empty(&view->saved_buffers)) {
-		view_remove_saved_buffer(view);
-	}
 	list_free(view->executed_criteria);
 
 	wlr_scene_node_destroy(view->scene_node);
@@ -892,10 +888,10 @@ void view_center_surface(struct sway_view *view) {
 	struct sway_container *con = view->container;
 	// We always center the current coordinates rather than the next, as the
 	// geometry immediately affects the currently active rendering.
-	con->surface_x = fmax(con->current.content_x, con->current.content_x +
-			(con->current.content_width - view->geometry.width) / 2);
-	con->surface_y = fmax(con->current.content_y, con->current.content_y +
-			(con->current.content_height - view->geometry.height) / 2);
+	int x = (int) fmax(0, (con->current.content_width - view->geometry.width) / 2);
+	int y = (int) fmax(0, (con->current.content_height - view->geometry.height) / 2);
+
+	wlr_scene_node_set_position(view->content_node, x, y);
 }
 
 void view_child_init(struct sway_view_child *child,
@@ -1154,44 +1150,69 @@ bool view_is_urgent(struct sway_view *view) {
 }
 
 void view_remove_saved_buffer(struct sway_view *view) {
-	if (!sway_assert(!wl_list_empty(&view->saved_buffers), "Expected a saved buffer")) {
+	if (!sway_assert(view->saved_surface_node, "Expected a saved buffer")) {
 		return;
 	}
-	struct sway_saved_buffer *saved_buf, *tmp;
-	wl_list_for_each_safe(saved_buf, tmp, &view->saved_buffers, link) {
-		wlr_buffer_unlock(&saved_buf->buffer->base);
-		wl_list_remove(&saved_buf->link);
-		free(saved_buf);
-	}
+
+	wlr_scene_node_destroy(view->saved_surface_node);
+	view->saved_surface_node = NULL;
+	wlr_scene_node_set_enabled(view->content_node, true);
 }
 
 static void view_save_buffer_iterator(struct wlr_surface *surface,
 		int sx, int sy, void *data) {
-	struct sway_view *view = data;
+	struct wlr_scene_node *scene = data;
 
 	if (surface && wlr_surface_has_buffer(surface)) {
-		wlr_buffer_lock(&surface->buffer->base);
-		struct sway_saved_buffer *saved_buffer = calloc(1, sizeof(struct sway_saved_buffer));
-		saved_buffer->buffer = surface->buffer;
-		saved_buffer->width = surface->current.width;
-		saved_buffer->height = surface->current.height;
-		saved_buffer->x = view->container->surface_x + sx;
-		saved_buffer->y = view->container->surface_y + sy;
-		saved_buffer->transform = surface->current.transform;
-		wlr_surface_get_buffer_source_box(surface, &saved_buffer->source_box);
-		wl_list_insert(view->saved_buffers.prev, &saved_buffer->link);
+		struct wlr_scene_buffer *sbuf =
+			wlr_scene_buffer_create(scene, &surface->buffer->base);
+
+		struct wlr_fbox source_box;
+		wlr_surface_get_buffer_source_box(surface, &source_box);
+		wlr_scene_buffer_set_source_box(sbuf, &source_box);
+		wlr_scene_node_set_position(&sbuf->node, sx, sy);
+		wlr_scene_buffer_set_dest_size(sbuf,
+			surface->current.width, surface->current.height);
+		wlr_scene_buffer_set_transform(sbuf, surface->current.transform);
 	}
 }
 
 void view_save_buffer(struct sway_view *view) {
-	if (!sway_assert(wl_list_empty(&view->saved_buffers), "Didn't expect saved buffer")) {
+	if (!sway_assert(!view->saved_surface_node, "Didn't expect saved buffer")) {
 		view_remove_saved_buffer(view);
 	}
-	view_for_each_surface(view, view_save_buffer_iterator, view);
+
+	struct wlr_scene_tree *tree = wlr_scene_tree_create(view->scene_node);
+	if (!tree) {
+		sway_log(SWAY_ERROR, "Could not allocate a scene tree node for saved surface");
+	}
+
+	wlr_scene_node_for_each_surface(view->content_node,
+		view_save_buffer_iterator, &tree->node);
+	wlr_scene_node_set_enabled(view->content_node, false);
+	
+	view->saved_surface_node = &tree->node;
 }
 
 bool view_is_transient_for(struct sway_view *child,
 		struct sway_view *ancestor) {
 	return child->impl->is_transient_for &&
 		child->impl->is_transient_for(child, ancestor);
+}
+
+static void send_frame_done_iterator(struct wlr_surface *surface,
+		int x, int y, void *data) {
+	struct timespec *when = data;
+	wlr_surface_send_frame_done(surface, when);
+}
+
+void view_send_frame_done(struct sway_view *view) {
+	struct timespec when;
+	clock_gettime(CLOCK_MONOTONIC, &when);
+
+	struct wlr_scene_node *node;
+	wl_list_for_each(node, &view->content_node->state.children, state.link) {
+		wlr_scene_node_for_each_surface(node,
+			send_frame_done_iterator, &when);
+	}
 }
