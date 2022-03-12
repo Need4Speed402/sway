@@ -15,12 +15,12 @@
 #include "cairo_util.h"
 #include "pango.h"
 #include "sway/config.h"
-#include "sway/desktop.h"
 #include "sway/desktop/transaction.h"
 #include "sway/input/input-manager.h"
 #include "sway/input/seat.h"
 #include "sway/ipc-server.h"
 #include "sway/scene_descriptor.h"
+#include "sway/sway_buffer.h"
 #include "sway/output.h"
 #include "sway/server.h"
 #include "sway/tree/arrange.h"
@@ -120,7 +120,321 @@ struct sway_container *container_create(struct sway_view *view) {
 	wl_signal_init(&c->events.destroy);
 	wl_signal_emit(&root->events.new_node, &c->node);
 
+	container_update(c);
+
 	return c;
+}
+
+static bool container_is_focused(struct sway_container *con, void *data) {
+	return con->current.focused;
+}
+
+static bool container_has_focused_child(struct sway_container *con) {
+	return container_find_child(con, container_is_focused, NULL);
+}
+
+static bool container_is_current_parent_focused(struct sway_container *con) {
+	if (con->current.parent) {
+		struct sway_container *parent = con->current.parent;
+		return parent->current.focused || container_is_current_parent_focused(parent);
+	} else if (con->current.workspace) {
+		struct sway_workspace *ws = con->current.workspace;
+		return ws->current.focused;
+	}
+
+	return false;
+}
+
+static struct border_colors *container_get_current_colors(
+		struct sway_container *con) {
+	struct border_colors *colors;
+
+	bool urgent = con->view ?
+		view_is_urgent(con->view) : container_has_urgent_child(con);
+	struct sway_container *active_child;
+
+	if (con->current.parent) {
+		active_child = con->current.parent->current.focused_inactive_child;
+	} else if (con->current.workspace) {
+		active_child = con->current.workspace->current.focused_inactive_child;
+	} else {
+		active_child = NULL;
+	}
+
+	if (urgent) {
+		colors = &config->border_colors.urgent;
+	} else if (con->current.focused || container_is_current_parent_focused(con)) {
+		colors = &config->border_colors.focused;
+	} else if (config->has_focused_tab_title && container_has_focused_child(con)) {
+		colors = &config->border_colors.focused_tab_title;
+	} else if (con == active_child) {
+		colors = &config->border_colors.focused_inactive;
+	} else {
+		colors = &config->border_colors.unfocused;
+	}
+
+	return colors;
+}
+
+static bool container_is_current_floating(struct sway_container *container) {
+	if (!container->current.parent && container->current.workspace &&
+			list_find(container->current.workspace->floating, container) != -1) {
+		return true;
+	}
+	if (container->scratchpad) {
+		return true;
+	}
+	return false;
+}
+
+void container_update(struct sway_container *con) {
+	struct border_colors *colors = container_get_current_colors(con);
+	list_t *siblings = NULL;
+	enum sway_container_layout layout = L_NONE;
+
+	if (con->current.parent) {
+		siblings = con->current.parent->current.children;
+		layout = con->current.parent->current.layout;
+	} else if (con->current.workspace) {
+		siblings = con->current.workspace->current.tiling;
+		layout = con->current.workspace->current.layout;
+	}
+
+	const float *bottom, *right;
+	bottom = (const float *) colors->child_border;
+	right = (const float *) colors->child_border;
+
+	if (!container_is_current_floating(con) && siblings && siblings->length == 1) {
+		if (layout == L_HORIZ) {
+			right = (const float *) colors->indicator;
+		} else if (layout == L_VERT) {
+			bottom = (const float *) colors->indicator;
+		}
+	}
+
+	wlr_scene_rect_set_color(con->title_bar.border, (const float *) colors->border);
+	wlr_scene_rect_set_color(con->title_bar.background, (const float *) colors->background);
+	
+	if (con->view) {
+		wlr_scene_rect_set_color(con->border.top, (const float *) colors->child_border);
+		wlr_scene_rect_set_color(con->border.bottom, bottom);
+		wlr_scene_rect_set_color(con->border.left, (const float *) colors->child_border);
+		wlr_scene_rect_set_color(con->border.right, right);
+	}
+
+	// only update the titlebar texture is the color has changed
+	if (colors->text != con->title_bar.last_used_title_color) {
+		container_update_title_textures(con);
+		con->title_bar.last_used_title_color = (const float *) colors->text;
+	}
+}
+
+void container_update_itself_and_parents(struct sway_container *con) {
+	container_update(con);
+
+	if (con->current.parent) {
+		container_update_itself_and_parents(con->current.parent);
+	}
+}
+
+static struct wlr_scene_buffer *create_text_scene_node(
+		struct sway_container *con, const float *color,
+		bool pango_markup, char *text) {
+	int scale = 2.; // output->wlr_output->scale;
+	int width = 0;
+	int baseline;
+	int height = config->font_height;
+	if (height == 0) {
+		return NULL;
+	}
+
+	// We must use a non-nil cairo_t for cairo_set_font_options to work.
+	// Therefore, we cannot use cairo_create(NULL).
+	cairo_surface_t *dummy_surface = cairo_image_surface_create(
+			CAIRO_FORMAT_ARGB32, 0, 0);
+	cairo_t *c = cairo_create(dummy_surface);
+	cairo_set_antialias(c, CAIRO_ANTIALIAS_BEST);
+	cairo_font_options_t *fo = cairo_font_options_create();
+	cairo_font_options_set_hint_style(fo, CAIRO_HINT_STYLE_FULL);
+	//if (output->wlr_output->subpixel == WL_OUTPUT_SUBPIXEL_NONE) {
+		cairo_font_options_set_antialias(fo, CAIRO_ANTIALIAS_GRAY);
+	/*} else {
+		cairo_font_options_set_antialias(fo, CAIRO_ANTIALIAS_SUBPIXEL);
+		cairo_font_options_set_subpixel_order(fo,
+			to_cairo_subpixel_order(output->wlr_output->subpixel));
+	}*/
+	cairo_set_font_options(c, fo);
+	get_text_size(c, config->font, &width, NULL, &baseline, scale,
+			config->pango_markup, "%s", text);
+	cairo_surface_destroy(dummy_surface);
+	cairo_destroy(c);
+
+	// normalize width to logical coordinates
+	width += scale - (width % scale);
+	width /= scale;
+
+	if (width == 0) {
+		cairo_font_options_destroy(fo);
+		return NULL;
+	}
+
+	cairo_surface_t *surface = cairo_image_surface_create(
+			CAIRO_FORMAT_ARGB32, width * scale, height * scale);
+	cairo_status_t status = cairo_surface_status(surface);
+	if (status != CAIRO_STATUS_SUCCESS) {
+		sway_log(SWAY_ERROR, "cairo_image_surface_create failed: %s",
+			cairo_status_to_string(status));
+		cairo_font_options_destroy(fo);
+		return NULL;
+	}
+
+	cairo_t *cairo = cairo_create(surface);
+	cairo_set_antialias(cairo, CAIRO_ANTIALIAS_BEST);
+	cairo_set_font_options(cairo, fo);
+	cairo_font_options_destroy(fo);
+	PangoContext *pango = pango_cairo_create_context(cairo);
+	cairo_set_source_rgba(cairo, color[0], color[1], color[2], color[3]);
+	cairo_move_to(cairo, 0, config->font_baseline * scale - baseline);
+
+	render_text(cairo, config->font, scale, pango_markup, "%s", text);
+
+	cairo_surface_flush(surface);
+	unsigned char *data = cairo_image_surface_get_data(surface);
+
+	struct sway_buffer *buffer = sway_buffer_create(width, height, scale,
+		DRM_FORMAT_ARGB8888);
+	memcpy(buffer->data, data, height * scale * buffer->stride);
+
+	cairo_surface_destroy(surface);
+	g_object_unref(pango);
+	cairo_destroy(cairo);
+
+	struct wlr_scene_buffer *node = wlr_scene_buffer_create(
+		con->title_bar.node, &buffer->base);
+
+	wlr_buffer_drop(&buffer->base);
+	return node;
+}
+
+void container_arrange_title_bar(struct sway_container *con, int width, int height) {
+	enum alignment title_align = config->title_align;
+	con->title_width = width;
+
+	int marks_buffer_width = 0;
+	if (con->title_bar.marks_buffer) {
+		struct sway_buffer *buffer = sway_buffer_from_wlr_buffer(
+			con->title_bar.marks_buffer->buffer);
+		marks_buffer_width = buffer->width;
+
+		int h_padding;
+		if (title_align == ALIGN_RIGHT) {
+			h_padding = config->titlebar_h_padding;
+		} else {
+			h_padding = width - config->titlebar_h_padding - marks_buffer_width;
+		}
+
+		h_padding = MAX(h_padding, 0);
+
+		int alloc_width = MIN((int) buffer->width, width - h_padding);
+		struct wlr_fbox source_box = {
+			.x = 0,
+			.y = 0,
+			.width = alloc_width * buffer->scale,
+			.height = buffer->height * buffer->scale,
+		};
+
+		wlr_scene_buffer_set_dest_size(con->title_bar.marks_buffer,
+			alloc_width, buffer->height);
+		wlr_scene_buffer_set_source_box(con->title_bar.marks_buffer,
+			&source_box);
+		wlr_scene_node_set_position(&con->title_bar.marks_buffer->node,
+			h_padding, (height - buffer->height) >> 1);
+	}
+
+	if (con->title_bar.title_buffer) {
+		struct sway_buffer *buffer = sway_buffer_from_wlr_buffer(
+			con->title_bar.title_buffer->buffer);
+
+		int h_padding;
+		if (title_align == ALIGN_RIGHT) {
+			h_padding = width - config->titlebar_h_padding - buffer->width;
+		} else if (title_align == ALIGN_CENTER) {
+			h_padding = ((int) width - marks_buffer_width - buffer->width) >> 1;
+		} else {
+			h_padding = config->titlebar_h_padding;
+		}
+
+		h_padding = MAX(h_padding, 0);
+
+		int alloc_width = MIN((int) buffer->width, width - h_padding);
+		struct wlr_fbox source_box = {
+			.x = 0,
+			.y = 0,
+			.width = alloc_width * buffer->scale,
+			.height = buffer->height * buffer->scale,
+		};
+
+		wlr_scene_buffer_set_dest_size(con->title_bar.title_buffer,
+			alloc_width, buffer->height);
+		wlr_scene_buffer_set_source_box(con->title_bar.title_buffer,
+			&source_box);
+		wlr_scene_node_set_position(&con->title_bar.title_buffer->node,
+			h_padding, (height - buffer->height) >> 1);
+	}
+}
+
+void container_update_title_textures(struct sway_container *con) {
+	if (!con->formatted_title) {
+		return;
+	}
+
+	struct border_colors *colors = container_get_current_colors(con);
+
+	if (con->title_bar.title_buffer) {
+		wlr_scene_node_destroy(&con->title_bar.title_buffer->node);
+		con->title_bar.title_buffer = NULL;
+	}
+
+	con->title_bar.title_buffer = create_text_scene_node(con, colors->text,
+		config->pango_markup, con->formatted_title);
+
+	if (con->title_bar.marks_buffer) {
+		wlr_scene_node_destroy(&con->title_bar.marks_buffer->node);
+		con->title_bar.marks_buffer = NULL;
+	}
+
+	if (config->show_marks) {
+		size_t len = 0;
+		for (int i = 0; i < con->marks->length; ++i) {
+			char *mark = con->marks->items[i];
+			if (mark[0] != '_') {
+				len += strlen(mark) + 2;
+			}
+		}
+		char *buffer = calloc(len + 1, 1);
+		char *part = malloc(len + 1);
+
+		if (!sway_assert(buffer && part, "Unable to allocate memory")) {
+			free(buffer);
+			return;
+		}
+
+		for (int i = 0; i < con->marks->length; ++i) {
+			char *mark = con->marks->items[i];
+			if (mark[0] != '_') {
+				snprintf(part, len + 1, "[%s]", mark);
+				strcat(buffer, part);
+			}
+		}
+		free(part);
+
+		con->title_bar.marks_buffer = create_text_scene_node(con, colors->text,
+			false, buffer);
+
+		free(buffer);
+	}
+
+	container_arrange_title_bar(con, con->title_width, container_titlebar_height());
 }
 
 void container_destroy(struct sway_container *con) {
@@ -134,21 +448,11 @@ void container_destroy(struct sway_container *con) {
 	}
 	free(con->title);
 	free(con->formatted_title);
-	wlr_texture_destroy(con->title_focused);
-	wlr_texture_destroy(con->title_focused_inactive);
-	wlr_texture_destroy(con->title_unfocused);
-	wlr_texture_destroy(con->title_urgent);
-	wlr_texture_destroy(con->title_focused_tab_title);
 	list_free(con->pending.children);
 	list_free(con->current.children);
 	list_free(con->outputs);
 
 	list_free_items_and_destroy(con->marks);
-	wlr_texture_destroy(con->marks_focused);
-	wlr_texture_destroy(con->marks_focused_inactive);
-	wlr_texture_destroy(con->marks_unfocused);
-	wlr_texture_destroy(con->marks_urgent);
-	wlr_texture_destroy(con->marks_focused_tab_title);
 
 	if (con->view && con->view->container == con) {
 		con->view->container = NULL;
@@ -307,110 +611,6 @@ struct sway_output *container_get_effective_output(struct sway_container *con) {
 	}
 	return con->outputs->items[con->outputs->length - 1];
 }
-
-static void render_titlebar_text_texture(struct sway_output *output,
-		struct sway_container *con, struct wlr_texture **texture,
-		struct border_colors *class, bool pango_markup, char *text) {
-	double scale = output->wlr_output->scale;
-	int width = 0;
-	int height = config->font_height * scale;
-	int baseline;
-
-	// We must use a non-nil cairo_t for cairo_set_font_options to work.
-	// Therefore, we cannot use cairo_create(NULL).
-	cairo_surface_t *dummy_surface = cairo_image_surface_create(
-			CAIRO_FORMAT_ARGB32, 0, 0);
-	cairo_t *c = cairo_create(dummy_surface);
-	cairo_set_antialias(c, CAIRO_ANTIALIAS_BEST);
-	cairo_font_options_t *fo = cairo_font_options_create();
-	cairo_font_options_set_hint_style(fo, CAIRO_HINT_STYLE_FULL);
-	if (output->wlr_output->subpixel == WL_OUTPUT_SUBPIXEL_NONE) {
-		cairo_font_options_set_antialias(fo, CAIRO_ANTIALIAS_GRAY);
-	} else {
-		cairo_font_options_set_antialias(fo, CAIRO_ANTIALIAS_SUBPIXEL);
-		cairo_font_options_set_subpixel_order(fo,
-			to_cairo_subpixel_order(output->wlr_output->subpixel));
-	}
-	cairo_set_font_options(c, fo);
-	get_text_size(c, config->font, &width, NULL, &baseline, scale,
-			config->pango_markup, "%s", text);
-	cairo_surface_destroy(dummy_surface);
-	cairo_destroy(c);
-
-	if (width == 0 || height == 0) {
-		return;
-	}
-
-	if (height > config->font_height * scale) {
-		height = config->font_height * scale;
-	}
-
-	cairo_surface_t *surface = cairo_image_surface_create(
-			CAIRO_FORMAT_ARGB32, width, height);
-	cairo_status_t status = cairo_surface_status(surface);
-	if (status != CAIRO_STATUS_SUCCESS) {
-		sway_log(SWAY_ERROR, "cairo_image_surface_create failed: %s",
-			cairo_status_to_string(status));
-		return;
-	}
-
-	cairo_t *cairo = cairo_create(surface);
-	cairo_set_antialias(cairo, CAIRO_ANTIALIAS_BEST);
-	cairo_set_font_options(cairo, fo);
-	cairo_font_options_destroy(fo);
-	cairo_set_source_rgba(cairo, class->background[0], class->background[1],
-			class->background[2], class->background[3]);
-	cairo_paint(cairo);
-	PangoContext *pango = pango_cairo_create_context(cairo);
-	cairo_set_source_rgba(cairo, class->text[0], class->text[1],
-			class->text[2], class->text[3]);
-	cairo_move_to(cairo, 0, config->font_baseline * scale - baseline);
-
-	render_text(cairo, config->font, scale, pango_markup, "%s", text);
-
-	cairo_surface_flush(surface);
-	unsigned char *data = cairo_image_surface_get_data(surface);
-	int stride = cairo_image_surface_get_stride(surface);
-	struct wlr_renderer *renderer = output->wlr_output->renderer;
-	*texture = wlr_texture_from_pixels(
-			renderer, DRM_FORMAT_ARGB8888, stride, width, height, data);
-	cairo_surface_destroy(surface);
-	g_object_unref(pango);
-	cairo_destroy(cairo);
-}
-
-static void update_title_texture(struct sway_container *con,
-		struct wlr_texture **texture, struct border_colors *class) {
-	struct sway_output *output = container_get_effective_output(con);
-	if (!output) {
-		return;
-	}
-	if (*texture) {
-		wlr_texture_destroy(*texture);
-		*texture = NULL;
-	}
-	if (!con->formatted_title) {
-		return;
-	}
-
-	render_titlebar_text_texture(output, con, texture, class,
-		config->pango_markup, con->formatted_title);
-}
-
-void container_update_title_textures(struct sway_container *container) {
-	update_title_texture(container, &container->title_focused,
-			&config->border_colors.focused);
-	update_title_texture(container, &container->title_focused_inactive,
-			&config->border_colors.focused_inactive);
-	update_title_texture(container, &container->title_unfocused,
-			&config->border_colors.unfocused);
-	update_title_texture(container, &container->title_urgent,
-			&config->border_colors.urgent);
-	update_title_texture(container, &container->title_focused_tab_title,
-			&config->border_colors.focused_tab_title);
-	container_damage_whole(container);
-}
-
 /**
  * Calculate and return the length of the tree representation.
  * An example tree representation is: V[Terminal, Firefox]
@@ -741,17 +941,6 @@ void container_set_geometry_from_content(struct sway_container *con) {
 bool container_is_floating(struct sway_container *container) {
 	if (!container->pending.parent && container->pending.workspace &&
 			list_find(container->pending.workspace->floating, container) != -1) {
-		return true;
-	}
-	if (container->scratchpad) {
-		return true;
-	}
-	return false;
-}
-
-bool container_is_current_floating(struct sway_container *container) {
-	if (!container->current.parent && container->current.workspace &&
-			list_find(container->current.workspace->floating, container) != -1) {
 		return true;
 	}
 	if (container->scratchpad) {
@@ -1195,7 +1384,6 @@ void container_discover_outputs(struct sway_container *con) {
 	double new_scale = new_output ? new_output->wlr_output->scale : -1;
 	if (old_scale != new_scale) {
 		container_update_title_textures(con);
-		container_update_marks_textures(con);
 	}
 }
 
@@ -1207,14 +1395,6 @@ enum sway_container_layout container_parent_layout(struct sway_container *con) {
 		return con->pending.workspace->layout;
 	}
 	return L_NONE;
-}
-
-enum sway_container_layout container_current_parent_layout(
-		struct sway_container *con) {
-	if (con->current.parent) {
-		return con->current.parent->current.layout;
-	}
-	return con->current.workspace->current.layout;
 }
 
 list_t *container_get_siblings(struct sway_container *container) {
@@ -1232,13 +1412,6 @@ list_t *container_get_siblings(struct sway_container *container) {
 
 int container_sibling_index(struct sway_container *child) {
 	return list_find(container_get_siblings(child), child);
-}
-
-list_t *container_get_current_siblings(struct sway_container *container) {
-	if (container->current.parent) {
-		return container->current.parent->current.children;
-	}
-	return container->current.workspace->current.tiling;
 }
 
 void container_handle_fullscreen_reparent(struct sway_container *con) {
@@ -1455,7 +1628,7 @@ bool container_find_and_unmark(char *mark) {
 		if (strcmp(con_mark, mark) == 0) {
 			free(con_mark);
 			list_del(con->marks, i);
-			container_update_marks_textures(con);
+			container_update_title_textures(con);
 			ipc_event_window(con, "mark");
 			return true;
 		}
@@ -1486,70 +1659,15 @@ void container_add_mark(struct sway_container *con, char *mark) {
 	ipc_event_window(con, "mark");
 }
 
-static void update_marks_texture(struct sway_container *con,
-		struct wlr_texture **texture, struct border_colors *class) {
-	struct sway_output *output = container_get_effective_output(con);
-	if (!output) {
-		return;
-	}
-	if (*texture) {
-		wlr_texture_destroy(*texture);
-		*texture = NULL;
-	}
-	if (!con->marks->length) {
-		return;
-	}
-
-	size_t len = 0;
-	for (int i = 0; i < con->marks->length; ++i) {
-		char *mark = con->marks->items[i];
-		if (mark[0] != '_') {
-			len += strlen(mark) + 2;
-		}
-	}
-	char *buffer = calloc(len + 1, 1);
-	char *part = malloc(len + 1);
-
-	if (!sway_assert(buffer && part, "Unable to allocate memory")) {
-		free(buffer);
-		return;
-	}
-
-	for (int i = 0; i < con->marks->length; ++i) {
-		char *mark = con->marks->items[i];
-		if (mark[0] != '_') {
-			snprintf(part, len + 1, "[%s]", mark);
-			strcat(buffer, part);
-		}
-	}
-	free(part);
-
-	render_titlebar_text_texture(output, con, texture, class, false, buffer);
-
-	free(buffer);
-}
-
-void container_update_marks_textures(struct sway_container *con) {
-	if (!config->show_marks) {
-		return;
-	}
-	update_marks_texture(con, &con->marks_focused,
-			&config->border_colors.focused);
-	update_marks_texture(con, &con->marks_focused_inactive,
-			&config->border_colors.focused_inactive);
-	update_marks_texture(con, &con->marks_unfocused,
-			&config->border_colors.unfocused);
-	update_marks_texture(con, &con->marks_urgent,
-			&config->border_colors.urgent);
-	update_marks_texture(con, &con->marks_focused_tab_title,
-			&config->border_colors.focused_tab_title);
-	container_damage_whole(con);
-}
-
 void container_raise_floating(struct sway_container *con) {
 	// Bring container to front by putting it at the end of the floating list.
 	struct sway_container *floater = container_toplevel_ancestor(con);
 	if (container_is_floating(floater) && floater->pending.workspace) {
+		// it's okay to just raise the scene directly instead of waiting
+		// for the transaction to go through. We won't be reconfiguring
+		// surfaces
+		wlr_scene_node_raise_to_top(floater->scene_node);
+		
 		list_move_to_end(floater->pending.workspace->floating, floater);
 		node_set_dirty(&floater->pending.workspace->node);
 	}

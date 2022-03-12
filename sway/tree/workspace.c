@@ -830,6 +830,9 @@ void workspace_add_floating(struct sway_workspace *workspace,
 	if (con->pending.workspace) {
 		container_detach(con);
 	}
+
+	wlr_scene_node_raise_to_top(con->scene_node);
+
 	list_add(workspace->floating, con);
 	con->pending.workspace = workspace;
 	container_for_each_child(con, set_workspace, NULL);

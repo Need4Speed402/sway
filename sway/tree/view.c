@@ -1376,6 +1376,7 @@ void view_set_urgent(struct sway_view *view, bool enable) {
 			return;
 		}
 		clock_gettime(CLOCK_MONOTONIC, &view->urgent);
+		container_update_itself_and_parents(view->container);
 	} else {
 		view->urgent = (struct timespec){ 0 };
 		if (view->urgent_timer) {

@@ -79,6 +79,12 @@ struct sway_container {
 
 		struct wlr_scene_buffer *title_buffer;
 		struct wlr_scene_buffer *marks_buffer;
+
+		// This float array represents a color holding 4 channels. This is the
+		// color the text in the title bar in the scene node has. If we want to
+		// do a container update, we'll compare the color used from last time to
+		// prevent recomputation of state unnecessarily.
+		const float *last_used_title_color;
 	} title_bar;
 
 	struct {
@@ -97,6 +103,7 @@ struct sway_container {
 
 	char *title;           // The view's title (unformatted)
 	char *formatted_title; // The title displayed in the title bar
+	int title_width;
 
 	enum sway_container_layout prev_split_layout;
 
@@ -139,18 +146,7 @@ struct sway_container {
 
 	float alpha;
 
-	struct wlr_texture *title_focused;
-	struct wlr_texture *title_focused_inactive;
-	struct wlr_texture *title_focused_tab_title;
-	struct wlr_texture *title_unfocused;
-	struct wlr_texture *title_urgent;
-
 	list_t *marks; // char *
-	struct wlr_texture *marks_focused;
-	struct wlr_texture *marks_focused_inactive;
-	struct wlr_texture *marks_focused_tab_title;
-	struct wlr_texture *marks_unfocused;
-	struct wlr_texture *marks_urgent;
 
 	struct {
 		struct wl_signal destroy;
@@ -226,11 +222,6 @@ void container_set_geometry_from_content(struct sway_container *con);
 bool container_is_floating(struct sway_container *container);
 
 /**
- * Same as above, but for current container state.
- */
-bool container_is_current_floating(struct sway_container *container);
-
-/**
  * Get a container's box in layout coordinates.
  */
 void container_get_box(struct sway_container *container, struct wlr_box *box);
@@ -303,14 +294,9 @@ void container_discover_outputs(struct sway_container *con);
 
 enum sway_container_layout container_parent_layout(struct sway_container *con);
 
-enum sway_container_layout container_current_parent_layout(
-		struct sway_container *con);
-
 list_t *container_get_siblings(struct sway_container *container);
 
 int container_sibling_index(struct sway_container *child);
-
-list_t *container_get_current_siblings(struct sway_container *container);
 
 void container_handle_fullscreen_reparent(struct sway_container *con);
 
@@ -359,8 +345,6 @@ bool container_has_mark(struct sway_container *container, char *mark);
 
 void container_add_mark(struct sway_container *container, char *mark);
 
-void container_update_marks_textures(struct sway_container *container);
-
 void container_raise_floating(struct sway_container *con);
 
 bool container_is_scratchpad_hidden(struct sway_container *con);
@@ -383,5 +367,11 @@ bool container_is_sticky_or_child(struct sway_container *con);
  * Returns the number of new containers added to the parent
  */
 int container_squash(struct sway_container *con);
+
+void container_arrange_title_bar(struct sway_container *con, int width, int height);
+
+void container_update(struct sway_container *con);
+
+void container_update_itself_and_parents(struct sway_container *con);
 
 #endif

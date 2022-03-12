@@ -10,7 +10,6 @@
 #include "log.h"
 
 static void rebuild_textures_iterator(struct sway_container *con, void *data) {
-	container_update_marks_textures(con);
 	container_update_title_textures(con);
 }
 
