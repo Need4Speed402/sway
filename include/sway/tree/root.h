@@ -37,10 +37,14 @@ struct sway_root {
 	struct wlr_scene_node *staging;
 
 	struct {
+		struct wlr_scene_node *shell_background;
+		struct wlr_scene_node *shell_bottom;
 		struct wlr_scene_node *tiling;
 		struct wlr_scene_node *floating;
+		struct wlr_scene_node *shell_top;
 		struct wlr_scene_node *fullscreen;
 		struct wlr_scene_node *fullscreen_global;
+		struct wlr_scene_node *shell_overlay;
 		struct wlr_scene_node *seat;
 		struct wlr_scene_node *session_lock;
 	} layers;
