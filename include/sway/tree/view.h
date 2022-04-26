@@ -145,6 +145,8 @@ struct sway_xdg_shell_view {
 struct sway_xwayland_view {
 	struct sway_view view;
 
+	struct wlr_scene_surface *surface_scene;
+
 	struct wl_listener commit;
 	struct wl_listener request_move;
 	struct wl_listener request_resize;
@@ -167,14 +169,12 @@ struct sway_xwayland_view {
 
 struct sway_xwayland_unmanaged {
 	struct wlr_xwayland_surface *wlr_xwayland_surface;
-	struct wl_list link;
 
-	int lx, ly;
+	struct wlr_scene_surface *surface_scene;
 
 	struct wl_listener request_activate;
 	struct wl_listener request_configure;
 	struct wl_listener request_fullscreen;
-	struct wl_listener commit;
 	struct wl_listener set_geometry;
 	struct wl_listener map;
 	struct wl_listener unmap;
