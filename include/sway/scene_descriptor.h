@@ -3,6 +3,8 @@
 #include <wlr/types/wlr_scene.h>
 
 enum sway_scene_descriptor_type {
+	SWAY_SCENE_DESC_NON_INTERACTIVE,
+	SWAY_SCENE_DESC_CONTAINER,
 	SWAY_SCENE_DESC_DRAG_ICON,
 };
 
