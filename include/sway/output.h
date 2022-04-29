@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <wayland-server-core.h>
 #include <wlr/types/wlr_output.h>
+#include <wlr/types/wlr_scene.h>
 #include "config.h"
 #include "sway/tree/node.h"
 #include "sway/tree/view.h"
@@ -18,7 +19,14 @@ struct sway_output_state {
 
 struct sway_output {
 	struct sway_node node;
+
+	struct {
+		struct wlr_scene_node *tiling;
+		struct wlr_scene_node *fullscreen;
+	} layers;
+
 	struct wlr_output *wlr_output;
+	struct wlr_scene_output *scene_output;
 	struct sway_server *server;
 	struct wl_list link;
 

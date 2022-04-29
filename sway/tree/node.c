@@ -159,3 +159,27 @@ bool node_has_ancestor(struct sway_node *node, struct sway_node *ancestor) {
 	}
 	return false;
 }
+
+void scene_node_disown_children(struct wlr_scene_node *node) {
+	struct wlr_scene_node *child, *tmp_child;
+	wl_list_for_each_safe(child, tmp_child, &node->state.children, state.link) {
+		wlr_scene_node_reparent(child, root->staging);
+	}
+}
+
+struct wlr_scene_node *alloc_scene_node(struct wlr_scene_node *parent,
+		bool *failed) {
+	// fallthrough
+	if (*failed) {
+		return NULL;
+	}
+
+	struct wlr_scene_tree *tree = wlr_scene_tree_create(parent);
+	if (!tree) {
+		sway_log(SWAY_ERROR, "Failed to allocate a scene node");
+		*failed = true;
+		return NULL;
+	}
+
+	return &tree->node;
+}

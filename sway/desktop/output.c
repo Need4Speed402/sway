@@ -787,6 +787,7 @@ static void handle_destroy(struct wl_listener *listener, void *data) {
 	wl_list_remove(&output->mode.link);
 	wl_list_remove(&output->present.link);
 
+	output->scene_output = NULL;
 	output->wlr_output->data = NULL;
 	output->wlr_output = NULL;
 

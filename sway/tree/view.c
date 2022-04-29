@@ -35,12 +35,21 @@
 
 bool view_init(struct sway_view *view, enum sway_view_type type,
 		const struct sway_view_impl *impl) {
+	bool alloc_failure = false;
+	view->scene_node = alloc_scene_node(root->staging, &alloc_failure);
+	view->content_node = alloc_scene_node(view->scene_node, &alloc_failure);
+	if (alloc_failure) {
+		wlr_scene_node_destroy(view->scene_node);
+		return false;
+	}
+
 	view->type = type;
 	view->impl = impl;
 	view->executed_criteria = create_list();
 	wl_list_init(&view->saved_buffers);
 	view->allow_request_urgent = true;
 	view->shortcuts_inhibit = SHORTCUTS_INHIBIT_DEFAULT;
+
 	wl_signal_init(&view->events.unmap);
 	return true;
 }
@@ -64,6 +73,7 @@ void view_destroy(struct sway_view *view) {
 	}
 	list_free(view->executed_criteria);
 
+	wlr_scene_node_destroy(view->scene_node);
 	free(view->title_format);
 
 	if (view->impl->destroy) {

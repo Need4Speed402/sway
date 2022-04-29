@@ -87,10 +87,45 @@ static void restore_workspaces(struct sway_output *output) {
 	output_sort_workspaces(output);
 }
 
+static void destroy_scene_layers(struct sway_output *output) {
+	size_t num_layers = sizeof(output->layers) / sizeof(struct wlr_scene_node *);
+	for (size_t i = 0; i < num_layers; i++) {
+		struct wlr_scene_node *node =
+			((struct wlr_scene_node **) &output->layers)[i];
+
+		if (node) {
+			scene_node_disown_children(node);
+			wlr_scene_node_destroy(node);
+		}
+	}
+}
+
 struct sway_output *output_create(struct wlr_output *wlr_output) {
 	struct sway_output *output = calloc(1, sizeof(struct sway_output));
 	node_init(&output->node, N_OUTPUT, output);
+
+	bool alloc_failure = false;
+	size_t num_layers = sizeof(output->layers) / sizeof(struct wlr_scene_node *);
+	for (size_t i = 0; i < num_layers; i++) {
+		((struct wlr_scene_node **) &output->layers)[i] =
+			alloc_scene_node(root->staging, &alloc_failure);
+	}
+
+	output->scene_output = wlr_scene_output_create(root->root_scene, wlr_output);
+	if (!output->scene_output) {
+		sway_log(SWAY_ERROR, "Unable to allocate a scene output");
+		alloc_failure = true;
+	}
+
+	if (alloc_failure) {
+		destroy_scene_layers(output);
+		wlr_scene_output_destroy(output->scene_output);
+		free(output);
+		return NULL;
+	}
+
 	output->wlr_output = wlr_output;
+	
 	wlr_output->data = output;
 	output->detected_subpixel = wlr_output->subpixel;
 	output->scale_filter = SCALE_FILTER_NEAREST;
@@ -238,6 +273,8 @@ void output_destroy(struct sway_output *output) {
 				"which is still referenced by transactions")) {
 		return;
 	}
+
+	destroy_scene_layers(output);
 	list_free(output->workspaces);
 	list_free(output->current.workspaces);
 	wl_event_source_remove(output->repaint_timer);
