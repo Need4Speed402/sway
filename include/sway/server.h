@@ -27,6 +27,7 @@
 #endif
 
 struct sway_transaction;
+struct sway_session_lock;
 
 struct sway_server {
 	struct wl_display *wl_display;
@@ -92,12 +93,8 @@ struct sway_server {
 
 	struct {
 		bool locked;
+		struct sway_session_lock *lock;
 		struct wlr_session_lock_manager_v1 *manager;
-
-		struct wlr_session_lock_v1 *lock;
-		struct wl_listener lock_new_surface;
-		struct wl_listener lock_unlock;
-		struct wl_listener lock_destroy;
 
 		struct wl_listener new_lock;
 		struct wl_listener manager_destroy;
@@ -163,6 +160,8 @@ void handle_new_output(struct wl_listener *listener, void *data);
 void handle_idle_inhibitor_v1(struct wl_listener *listener, void *data);
 void handle_layer_shell_surface(struct wl_listener *listener, void *data);
 void sway_session_lock_init(void);
+void sway_session_lock_add_output(struct sway_session_lock *lock,
+	struct sway_output *output);
 void handle_xdg_shell_surface(struct wl_listener *listener, void *data);
 #if HAVE_XWAYLAND
 void handle_xwayland_surface(struct wl_listener *listener, void *data);

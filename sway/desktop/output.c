@@ -680,6 +680,10 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 	apply_output_config(oc, output);
 	free_output_config(oc);
 
+	if (server->session_lock.lock) {
+		sway_session_lock_add_output(server->session_lock.lock, output);
+	}
+
 	transaction_commit_dirty();
 
 	update_output_manager_config(server);

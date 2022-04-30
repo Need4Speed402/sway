@@ -42,6 +42,7 @@ struct sway_root {
 		struct wlr_scene_node *fullscreen;
 		struct wlr_scene_node *fullscreen_global;
 		struct wlr_scene_node *seat;
+		struct wlr_scene_node *session_lock;
 	} layers;
 
 #if HAVE_XWAYLAND

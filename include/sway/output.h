@@ -23,6 +23,7 @@ struct sway_output {
 	struct {
 		struct wlr_scene_node *tiling;
 		struct wlr_scene_node *fullscreen;
+		struct wlr_scene_node *session_lock;
 	} layers;
 
 	struct wlr_output *wlr_output;
