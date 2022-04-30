@@ -125,7 +125,7 @@ static void handle_output_destroy(struct wl_listener *listener, void *data) {
 		}
 	}
 
-	wlr_scene_node_destroy(layer->scene->node);
+	//wlr_scene_node_destroy(layer->scene->node);
 	layer->output = NULL;
 }
 

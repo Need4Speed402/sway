@@ -125,7 +125,7 @@ static void sway_session_lock_output_destroy(struct sway_session_lock_output *ou
 		session_lock_surface_destroy(surf);
 	}
 
-	wlr_scene_node_destroy(output->node);
+	//wlr_scene_node_destroy(output->node);
 
 	wl_list_remove(&output->mode.link);
 	wl_list_remove(&output->commit.link);
