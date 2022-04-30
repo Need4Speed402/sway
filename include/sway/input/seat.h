@@ -5,6 +5,7 @@
 #include <wlr/types/wlr_layer_shell_v1.h>
 #include <wlr/types/wlr_seat.h>
 #include <wlr/util/edges.h>
+#include <wlr/types/wlr_scene.h>
 #include "sway/config.h"
 #include "sway/input/input-manager.h"
 #include "sway/input/tablet.h"
@@ -51,16 +52,12 @@ struct sway_seat_node {
 };
 
 struct sway_drag_icon {
-	struct sway_seat *seat;
 	struct wlr_drag_icon *wlr_drag_icon;
-	struct wl_list link; // sway_root::drag_icons
+	struct wlr_scene_node *node;
+	struct wlr_scene_node *surface_tree_node;
 
-	double x, y; // in layout-local coordinates
-
-	struct wl_listener surface_commit;
-	struct wl_listener map;
-	struct wl_listener unmap;
 	struct wl_listener destroy;
+	struct wl_listener commit;
 };
 
 struct sway_drag {
@@ -72,6 +69,15 @@ struct sway_drag {
 struct sway_seat {
 	struct wlr_seat *wlr_seat;
 	struct sway_cursor *cursor;
+
+	// Seat scene tree structure
+	// - scene_node
+	//   - drag icons
+	//     - drag icon 1
+	//     - drag icon 2
+	//   - seatop specific stuff
+	struct wlr_scene_node *scene_node;
+	struct wlr_scene_node *drag_icons;
 
 	bool has_focus;
 	struct wl_list focus_stack; // list of containers in focus order
@@ -235,7 +241,7 @@ void seat_idle_notify_activity(struct sway_seat *seat,
 
 bool seat_is_input_allowed(struct sway_seat *seat, struct wlr_surface *surface);
 
-void drag_icon_update_position(struct sway_drag_icon *icon);
+void drag_icon_update_position(struct sway_seat *seat, struct sway_drag_icon *icon);
 
 enum wlr_edges find_resize_edge(struct sway_container *cont,
 		struct wlr_surface *surface, struct sway_cursor *cursor);
