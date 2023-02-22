@@ -14,7 +14,6 @@
 #include "sway/layers.h"
 #include "sway/output.h"
 #include "sway/server.h"
-#include "sway/surface.h"
 #include "sway/tree/arrange.h"
 #include "sway/tree/workspace.h"
 #include <wlr/types/wlr_scene.h>
@@ -420,8 +419,6 @@ void handle_layer_shell_surface(struct wl_listener *listener, void *data) {
 
 	surface->node_destroy.notify = handle_node_destroy;
 	wl_signal_add(&scene_surface->tree->node.events.destroy, &surface->node_destroy);
-
-	surface_enter_output(layer_surface->surface, output);
 
 	// Temporarily set the layer's current state to pending
 	// So that we can easily arrange it
