@@ -85,6 +85,13 @@ static bool filter_global(const struct wl_client *client,
 	return true;
 }
 
+static void output_manager_primary_reset(struct wl_listener *listener, void *data) {
+	struct sway_server *server = wl_container_of(listener, server, output_manager_primary_reset);
+	wlr_linux_dmabuf_v1_set_main_blit_device(server->linux_dmabuf_v1,
+		server->output_manager.primary.renderer,
+		server->output_manager.primary.allocator);
+}
+
 bool server_init(struct sway_server *server) {
 	sway_log(SWAY_DEBUG, "Initializing Wayland server");
 	server->wl_display = wl_display_create();
@@ -106,6 +113,15 @@ bool server_init(struct sway_server *server) {
 		wlr_drm_create(server->wl_display, renderer);
 		server->linux_dmabuf_v1 =
 			wlr_linux_dmabuf_v1_create_with_renderer(server->wl_display, 4, renderer);
+
+		if (server->linux_dmabuf_v1) {
+			wlr_linux_dmabuf_v1_set_main_blit_device(server->linux_dmabuf_v1, renderer,
+				server->output_manager.primary.allocator);
+
+			server->output_manager_primary_reset.notify = output_manager_primary_reset;
+			wl_signal_add(&server->output_manager.primary.events.recovery,
+				&server->output_manager_primary_reset);
+		}
 	}
 
 	server->compositor = wlr_compositor_create(server->wl_display, 6,
