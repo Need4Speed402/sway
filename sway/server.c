@@ -37,6 +37,7 @@
 #include <wlr/types/wlr_session_lock_v1.h>
 #include <wlr/types/wlr_single_pixel_buffer_v1.h>
 #include <wlr/types/wlr_subcompositor.h>
+#include <wlr/types/wlr_surface_invalidation_v1.h>
 #include <wlr/types/wlr_tablet_v2.h>
 #include <wlr/types/wlr_viewporter.h>
 #include <wlr/types/wlr_xcursor_manager.h>
@@ -335,6 +336,7 @@ bool server_init(struct sway_server *server) {
 	server->data_control_manager_v1 = wlr_data_control_manager_v1_create(server->wl_display);
 	server->security_context_manager_v1 = wlr_security_context_manager_v1_create(server->wl_display);
 	wlr_viewporter_create(server->wl_display);
+	wlr_surface_invalidation_manager_v1_create(server->wl_display, 1);
 	wlr_single_pixel_buffer_manager_v1_create(server->wl_display);
 	server->content_type_manager_v1 =
 		wlr_content_type_manager_v1_create(server->wl_display, 1);
