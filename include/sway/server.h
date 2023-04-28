@@ -3,8 +3,7 @@
 #include <stdbool.h>
 #include <wayland-server-core.h>
 #include <wlr/backend.h>
-#include <wlr/render/allocator.h>
-#include <wlr/render/wlr_renderer.h>
+#include <wlr/types/wlr_output_manager.h>
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_data_device.h>
 #include <wlr/types/wlr_input_method_v2.h>
@@ -47,10 +46,9 @@ struct sway_server {
 
 	struct wlr_backend *backend;
 	struct wlr_session *session;
+	struct wlr_output_manager output_manager;
 	// secondary headless backend used for creating virtual outputs on-the-fly
 	struct wlr_backend *headless_backend;
-	struct wlr_renderer *renderer;
-	struct wlr_allocator *allocator;
 
 	struct wlr_compositor *compositor;
 

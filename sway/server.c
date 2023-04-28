@@ -98,25 +98,14 @@ bool server_init(struct sway_server *server) {
 		return false;
 	}
 
-	server->renderer = wlr_renderer_autocreate(server->backend);
-	if (!server->renderer) {
-		sway_log(SWAY_ERROR, "Failed to create renderer");
-		return false;
-	}
+	wlr_output_manager_init(&server->output_manager, server->backend);
+	wlr_output_manager_init_wl_shm(&server->output_manager, server->wl_display);
 
-	wlr_renderer_init_wl_shm(server->renderer, server->wl_display);
-
-	if (wlr_renderer_get_dmabuf_texture_formats(server->renderer) != NULL) {
-		wlr_drm_create(server->wl_display, server->renderer);
-		server->linux_dmabuf_v1 = wlr_linux_dmabuf_v1_create_with_renderer(
-			server->wl_display, 4, server->renderer);
-	}
-
-	server->allocator = wlr_allocator_autocreate(server->backend,
-		server->renderer);
-	if (!server->allocator) {
-		sway_log(SWAY_ERROR, "Failed to create allocator");
-		return false;
+	struct wlr_renderer *renderer = server->output_manager.primary.renderer;
+	if (wlr_renderer_get_dmabuf_texture_formats(renderer) != NULL) {
+		wlr_drm_create(server->wl_display, renderer);
+		server->linux_dmabuf_v1 =
+			wlr_linux_dmabuf_v1_create_with_renderer(server->wl_display, 4, renderer);
 	}
 
 	server->compositor = wlr_compositor_create(server->wl_display, 6,
