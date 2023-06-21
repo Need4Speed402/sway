@@ -110,17 +110,6 @@ static const char *ipc_json_output_transform_description(enum wl_output_transfor
 	return NULL;
 }
 
-static const char *ipc_json_output_adaptive_sync_status_description(
-		enum wlr_output_adaptive_sync_status status) {
-	switch (status) {
-	case WLR_OUTPUT_ADAPTIVE_SYNC_DISABLED:
-		return "disabled";
-	case WLR_OUTPUT_ADAPTIVE_SYNC_ENABLED:
-		return "enabled";
-	}
-	return NULL;
-}
-
 static const char *ipc_json_output_mode_aspect_ratio_description(
 		enum wlr_output_mode_aspect_ratio aspect_ratio) {
 	switch (aspect_ratio) {
@@ -344,11 +333,10 @@ static void ipc_json_describe_enabled_output(struct sway_output *output,
 	json_object_object_add(object, "transform",
 		json_object_new_string(
 			ipc_json_output_transform_description(wlr_output->transform)));
-	const char *adaptive_sync_status =
-		ipc_json_output_adaptive_sync_status_description(
-			wlr_output->adaptive_sync_status);
+	json_object_object_add(object, "adaptive_sync_enabled",
+		json_object_new_boolean(wlr_output->adaptive_sync_enabled));
 	json_object_object_add(object, "adaptive_sync_status",
-		json_object_new_string(adaptive_sync_status));
+		json_object_new_string(wlr_output->adaptive_sync_enabled ? "enabled" : "disabled"));
 
 	struct sway_workspace *ws = output_get_active_workspace(output);
 	if (!sway_assert(ws, "Expected output to have a workspace")) {
