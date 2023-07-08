@@ -512,6 +512,8 @@ int main(int argc, char **argv) {
 		type = IPC_GET_OUTPUTS;
 	} else if (strcasecmp(cmdtype, "get_tree") == 0) {
 		type = IPC_GET_TREE;
+	} else if (strcasecmp(cmdtype, "get_scene_tree") == 0) {
+		type = IPC_GET_SCENE_TREE;
 	} else if (strcasecmp(cmdtype, "get_marks") == 0) {
 		type = IPC_GET_MARKS;
 	} else if (strcasecmp(cmdtype, "get_bar_config") == 0) {
