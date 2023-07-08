@@ -24,6 +24,7 @@
 #include "sway/ipc-server.h"
 #include "sway/output.h"
 #include "sway/input/seat.h"
+#include "sway/scene_descriptor.h"
 #include "sway/server.h"
 #include "sway/surface.h"
 #include "sway/tree/arrange.h"
@@ -40,6 +41,12 @@ bool view_init(struct sway_view *view, enum sway_view_type type,
 	bool alloc_failure = false;
 	view->scene_tree = alloc_scene_tree(root->staging, &alloc_failure);
 	view->content_tree = alloc_scene_tree(view->scene_tree, &alloc_failure);
+
+	if (!alloc_failure && !scene_descriptor_assign(&view->scene_tree->node,
+			SWAY_SCENE_DESC_VIEW, view)) {
+		alloc_failure = true;
+	}
+
 	if (alloc_failure) {
 		wlr_scene_node_destroy(&view->scene_tree->node);
 		return false;
