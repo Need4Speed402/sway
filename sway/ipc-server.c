@@ -815,6 +815,16 @@ void ipc_client_handle_command(struct ipc_client *client, uint32_t payload_lengt
 		goto exit_cleanup;
 	}
 
+	case IPC_GET_SCENE_TREE:
+	{
+		json_object *tree = ipc_json_describe_scene(root->root_scene);
+		const char *json_string = json_object_to_json_string(tree);
+		ipc_send_reply(client, payload_type, json_string,
+			(uint32_t)strlen(json_string));
+		json_object_put(tree);
+		goto exit_cleanup;
+	}
+
 	case IPC_GET_MARKS:
 	{
 		json_object *marks = json_object_new_array();
