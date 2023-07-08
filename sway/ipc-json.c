@@ -1415,3 +1415,142 @@ json_object *ipc_json_get_binding_mode(void) {
 			json_object_new_string(config->current_mode->name));
 	return current_mode;
 }
+
+#include "sway/scene_descriptor.h"
+
+static enum sway_scene_descriptor_type types[] = {
+	SWAY_SCENE_DESC_BUFFER_TIMER,
+	SWAY_SCENE_DESC_NON_INTERACTIVE,
+	SWAY_SCENE_DESC_CONTAINER,
+	SWAY_SCENE_DESC_VIEW,
+	SWAY_SCENE_DESC_LAYER_SHELL,
+	SWAY_SCENE_DESC_XWAYLAND_UNMANAGED,
+	SWAY_SCENE_DESC_POPUP,
+	SWAY_SCENE_DESC_DRAG_ICON,
+};
+
+static json_object *describe_scene_tree(struct wlr_scene_tree *tree) {
+	json_object *object = json_object_new_array();
+
+	struct wlr_scene_node *node;
+	wl_list_for_each(node, &tree->children, link) {
+		json_object *json_node = json_object_new_object();
+
+		json_object_object_add(json_node, "x", json_object_new_int(node->x));
+		json_object_object_add(json_node, "y", json_object_new_int(node->y));
+		json_object_object_add(json_node, "enabled",
+			json_object_new_boolean(node->enabled));
+
+		const char *type_string = "";
+		switch (node->type) {
+		case WLR_SCENE_NODE_TREE:;
+			type_string = "WLR_SCENE_NODE_TREE";
+			struct wlr_scene_tree *tree = (struct wlr_scene_tree *) node;
+			json_object_object_add(json_node, "tree",
+				describe_scene_tree(tree));
+			break;
+		case WLR_SCENE_NODE_BUFFER:;
+			type_string = "WLR_SCENE_NODE_BUFFER";
+			struct wlr_scene_buffer *buffer = (struct wlr_scene_buffer *) node;
+			json_object_object_add(json_node, "has_raster",
+				json_object_new_boolean(buffer->raster != NULL));
+			json_object_object_add(json_node, "is_surface",
+				json_object_new_boolean(wlr_scene_surface_try_from_buffer(buffer) != NULL));
+			break;
+		case WLR_SCENE_NODE_RECT:;
+			type_string = "WLR_SCENE_NODE_RECT";
+			struct wlr_scene_rect *rect = (struct wlr_scene_rect *) node;
+			json_object_object_add(json_node, "width",
+				json_object_new_int(rect->width));
+			json_object_object_add(json_node, "height",
+				json_object_new_int(rect->height));
+			json_object_object_add(json_node, "red",
+				json_object_new_double(rect->color[0]));
+			json_object_object_add(json_node, "green",
+				json_object_new_double(rect->color[1]));
+			json_object_object_add(json_node, "blue",
+				json_object_new_double(rect->color[2]));
+			json_object_object_add(json_node, "alpha",
+				json_object_new_double(rect->color[3]));
+			break;
+		}
+		json_object_object_add(json_node, "type",
+			json_object_new_string(type_string));
+
+		json_object *descriptors = json_object_new_array();
+
+		for (size_t i = 0; i < sizeof(types) / sizeof(types[0]); i++) {
+			enum sway_scene_descriptor_type type = types[i];
+			void *data = scene_descriptor_try_get(node, type);
+			if (!data) {
+				continue;
+			}
+
+			json_object *json_node_data = json_object_new_object();
+
+			const char *type_string = "";
+			switch (type) {
+			case SWAY_SCENE_DESC_BUFFER_TIMER:;
+				type_string = "SWAY_SCENE_DESC_BUFFER_TIMER";
+				break;
+			case SWAY_SCENE_DESC_NON_INTERACTIVE:;
+				type_string = "SWAY_SCENE_DESC_NON_INTERACTIVE";
+				break;
+			case SWAY_SCENE_DESC_CONTAINER:;
+				type_string = "SWAY_SCENE_DESC_CONTAINER";
+				struct sway_container *con = data;
+
+				if (con->formatted_title) {
+					json_object_object_add(json_node_data, "name",
+						json_object_new_string(con->formatted_title));
+				}
+				break;
+			case SWAY_SCENE_DESC_VIEW:;
+				type_string = "SWAY_SCENE_DESC_VIEW";
+				break;
+			case SWAY_SCENE_DESC_LAYER_SHELL:;
+				type_string = "SWAY_SCENE_DESC_LAYER_SHELL";
+				break;
+			case SWAY_SCENE_DESC_XWAYLAND_UNMANAGED:;
+				type_string = "SWAY_SCENE_DESC_XWAYLAND_UNMANAGED";
+				break;
+			case SWAY_SCENE_DESC_POPUP:;
+				type_string = "SWAY_SCENE_DESC_POPUP";
+				break;
+			case SWAY_SCENE_DESC_DRAG_ICON:;
+				type_string = "SWAY_SCENE_DESC_DRAG_ICON";
+				break;
+			}
+			json_object_object_add(json_node_data, "type",
+				json_object_new_string(type_string));
+
+			json_object_array_add(descriptors, json_node_data);
+		}
+
+		json_object_object_add(json_node, "descriptors", descriptors);
+		json_object_array_add(object, json_node);
+	}
+
+	return object;
+}
+
+json_object *ipc_json_describe_scene(struct wlr_scene *scene) {
+	json_object *object = json_object_new_object();
+	json_object *json_outputs = json_object_new_array();
+
+	struct wlr_scene_output *output;
+	wl_list_for_each(output, &scene->outputs, link) {
+		json_object *json_output = json_object_new_object();
+
+		json_object_object_add(json_output, "x", json_object_new_int(output->x));
+		json_object_object_add(json_output, "y", json_object_new_int(output->y));
+		json_object_object_add(json_output, "enabled",
+			json_object_new_boolean(output->output->enabled));
+
+		json_object_array_add(json_outputs, json_output);
+	}
+
+	json_object_object_add(object, "outputs", json_outputs);
+	json_object_object_add(object, "tree", describe_scene_tree(&scene->tree));
+	return object;
+}
