@@ -49,6 +49,7 @@ struct sway_root {
 		struct wlr_scene_tree *popup;
 		struct wlr_scene_tree *seat;
 		struct wlr_scene_tree *session_lock;
+		struct wlr_scene_tree *cursor;
 	} layers;
 
 	// Includes disabled outputs

@@ -56,6 +56,11 @@ struct sway_root *root_create(void) {
 		alloc_failure = true;
 	}
 
+	if (!scene_descriptor_assign(&root->layers.cursor->node,
+			SWAY_SCENE_DESC_NON_INTERACTIVE, (void *)1)) {
+		alloc_failure = true;
+	}
+
 	if (alloc_failure) {
 		wlr_scene_node_destroy(&root_scene->tree.node);
 		free(root);

@@ -1,6 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
 #include <limits.h>
-#include <wlr/types/wlr_cursor.h>
 #include <wlr/types/wlr_xcursor_manager.h>
 #include "sway/desktop/transaction.h"
 #include "sway/input/cursor.h"
@@ -41,8 +40,8 @@ static void handle_pointer_motion(struct sway_seat *seat, uint32_t time_msec) {
 
 	// The amount the mouse has moved since the start of the resize operation
 	// Positive is down/right
-	double mouse_move_x = cursor->cursor->x - e->ref_lx;
-	double mouse_move_y = cursor->cursor->y - e->ref_ly;
+	double mouse_move_x = cursor->x - e->ref_lx;
+	double mouse_move_y = cursor->y - e->ref_ly;
 
 	if (edge == WLR_EDGE_TOP || edge == WLR_EDGE_BOTTOM) {
 		mouse_move_x = 0;
@@ -175,8 +174,8 @@ void seatop_begin_resize_floating(struct sway_seat *seat,
 		(wlr_keyboard_get_modifiers(keyboard) & WLR_MODIFIER_SHIFT);
 
 	e->edge = edge == WLR_EDGE_NONE ? WLR_EDGE_BOTTOM | WLR_EDGE_RIGHT : edge;
-	e->ref_lx = seat->cursor->cursor->x;
-	e->ref_ly = seat->cursor->cursor->y;
+	e->ref_lx = seat->cursor->x;
+	e->ref_ly = seat->cursor->y;
 	e->ref_con_lx = con->pending.x;
 	e->ref_con_ly = con->pending.y;
 	e->ref_width = con->pending.width;

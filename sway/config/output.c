@@ -7,7 +7,6 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <wlr/config.h>
-#include <wlr/types/wlr_cursor.h>
 #include <wlr/types/wlr_output_layout.h>
 #include <wlr/types/wlr_output.h>
 #include "sway/config.h"

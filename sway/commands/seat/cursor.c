@@ -2,7 +2,6 @@
 #include <linux/input-event-codes.h>
 
 #include <strings.h>
-#include <wlr/types/wlr_cursor.h>
 #include <wlr/types/wlr_pointer.h>
 #include "sway/commands.h"
 #include "sway/input/cursor.h"
@@ -22,7 +21,7 @@ static struct cmd_results *handle_command(struct sway_cursor *cursor,
 		}
 		int delta_x = strtol(argv[1], NULL, 10);
 		int delta_y = strtol(argv[2], NULL, 10);
-		wlr_cursor_move(cursor->cursor, NULL, delta_x, delta_y);
+		sway_cursor_move(cursor, delta_x, delta_y);
 		cursor_rebase(cursor);
 		wlr_seat_pointer_notify_frame(cursor->seat->wlr_seat);
 	} else if (strcasecmp(argv[0], "set") == 0) {
@@ -30,9 +29,9 @@ static struct cmd_results *handle_command(struct sway_cursor *cursor,
 			return cmd_results_new(CMD_INVALID, "%s", expected_syntax);
 		}
 		// map absolute coords (0..1,0..1) to root container coords
-		float x = strtof(argv[1], NULL) / root->width;
-		float y = strtof(argv[2], NULL) / root->height;
-		wlr_cursor_warp_absolute(cursor->cursor, NULL, x, y);
+		float x = strtof(argv[1], NULL);
+		float y = strtof(argv[2], NULL);
+		sway_cursor_warp(cursor, x, y);
 		cursor_rebase(cursor);
 		wlr_seat_pointer_notify_frame(cursor->seat->wlr_seat);
 	} else {
