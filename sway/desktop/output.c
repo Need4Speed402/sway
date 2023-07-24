@@ -857,9 +857,6 @@ void output_damage_whole_container(struct sway_output *output,
 		.height = con->current.height + 2,
 	};
 	scale_box(&box, output->wlr_output->scale);
-	if (wlr_damage_ring_add_box(&output->damage_ring, &box)) {
-		wlr_output_schedule_frame(output->wlr_output);
-	}
 	// Damage subsurfaces as well, which may extend outside the box
 	if (con->view) {
 		damage_child_views_iterator(con, output);
@@ -915,6 +912,8 @@ static void handle_destroy(struct wl_listener *listener, void *data) {
 
 	wlr_damage_ring_finish(&output->damage_ring);
 
+	wlr_scene_output_destroy(output->scene_output);
+	output->scene_output = NULL;
 	output->wlr_output->data = NULL;
 	output->wlr_output = NULL;
 
@@ -1025,11 +1024,24 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 		return;
 	}
 
-	struct sway_output *output = output_create(wlr_output);
-	if (!output) {
+	// Create the scene output here so we're not accidentally creating one for
+	// the fallback output
+	struct wlr_scene_output *scene_output =
+		wlr_scene_output_create(root->root_scene, wlr_output);
+	if (!scene_output) {
+		sway_log(SWAY_ERROR, "Failed to create a scene output");
 		return;
 	}
+
+	struct sway_output *output = output_create(wlr_output);
+	if (!output) {
+		sway_log(SWAY_ERROR, "Failed to create a sway output");
+		wlr_scene_output_destroy(scene_output);
+		return;
+	}
+
 	output->server = server;
+	output->scene_output = scene_output;
 	wlr_damage_ring_init(&output->damage_ring);
 
 	wl_signal_add(&wlr_output->events.destroy, &output->destroy);
