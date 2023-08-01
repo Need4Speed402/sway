@@ -233,34 +233,22 @@ static int output_repaint_timer_handler(void *data) {
 
 	output_configure_scene(output, &root->root_scene->tree.node, 1.0f);
 
-	if (output->gamma_lut_changed) {
-		struct wlr_output_state pending;
-		wlr_output_state_init(&pending);
-		if (!wlr_scene_output_build_state(output->scene_output, &pending, NULL)) {
-			return 0;
-		}
-
-		output->gamma_lut_changed = false;
-		struct wlr_gamma_control_v1 *gamma_control =
-			wlr_gamma_control_manager_v1_get_control(
-			server.gamma_control_manager_v1, output->wlr_output);
-		if (!wlr_gamma_control_v1_apply(gamma_control, &pending)) {
-			wlr_output_state_finish(&pending);
-			return 0;
-		}
-
-		if (!wlr_output_commit_state(output->wlr_output, &pending)) {
-			wlr_gamma_control_v1_send_failed_and_destroy(gamma_control);
-			wlr_output_state_finish(&pending);
-			return 0;
-		}
-
-		wlr_damage_ring_rotate(&output->scene_output->damage_ring);
-		wlr_output_state_finish(&pending);
+	if (!output->pending.committed) {
+		wlr_scene_output_commit(output->scene_output, NULL);
 		return 0;
 	}
 
-	wlr_scene_output_commit(output->scene_output, NULL);
+	if (!wlr_scene_output_build_state(output->scene_output, &output->pending, NULL)) {
+		goto out;
+	}
+
+	if (!wlr_output_commit_state(output->wlr_output, &output->pending)) {
+		goto out;
+	}
+
+out:
+	wlr_output_state_finish(&output->pending);
+	wlr_output_state_init(&output->pending);
 	return 0;
 }
 
@@ -516,13 +504,35 @@ void handle_gamma_control_set_gamma(struct wl_listener *listener, void *data) {
 	const struct wlr_gamma_control_manager_v1_set_gamma_event *event = data;
 
 	struct sway_output *output = event->output->data;
-
-	if(!output) {
+	if (!output) {
 		return;
 	}
 
-	output->gamma_lut_changed = true;
+	struct wlr_output_state gamma_state;
+	wlr_output_state_init(&gamma_state);
+	if (!wlr_output_state_copy(&gamma_state, &output->pending)) {
+		wlr_gamma_control_v1_send_failed_and_destroy(event->control);
+		goto out;
+	}
+
+	if (!wlr_gamma_control_v1_apply(event->control, &gamma_state)) {
+		goto out;
+	}
+
+	if (!wlr_output_test_state(output->wlr_output, &gamma_state)) {
+		wlr_gamma_control_v1_send_failed_and_destroy(event->control);
+		goto out;
+	}
+
+	if (!wlr_output_state_copy(&output->pending, &gamma_state)) {
+		wlr_gamma_control_v1_send_failed_and_destroy(event->control);
+		goto out;
+	}
+
 	wlr_output_schedule_frame(output->wlr_output);
+
+out:
+	wlr_output_state_finish(&gamma_state);
 }
 
 static void output_manager_apply(struct sway_server *server,

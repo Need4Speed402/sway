@@ -387,6 +387,38 @@ static const uint32_t *bit_depth_preferences[] = {
 	},
 };
 
+static bool test(struct sway_output *output, struct wlr_output_state *pending) {
+	struct wlr_output *wlr_output = output->wlr_output;
+	if (pending->committed & WLR_OUTPUT_STATE_MODE) {
+		bool unchanged = false;
+		switch (pending->mode_type) {
+		case WLR_OUTPUT_STATE_MODE_FIXED:
+			unchanged = wlr_output->current_mode == pending->mode;
+			break;
+		case WLR_OUTPUT_STATE_MODE_CUSTOM:
+			unchanged = wlr_output->width == pending->custom_mode.width &&
+				wlr_output->height == pending->custom_mode.height &&
+				wlr_output->refresh == pending->custom_mode.refresh;
+			break;
+		}
+		if (unchanged) {
+			pending->committed &= ~WLR_OUTPUT_STATE_MODE;
+		}
+	}
+
+	// if we are lighting up an output or doing a moseset, we must commit a buffer too
+	// for the DRM backend
+	if (((pending->committed & WLR_OUTPUT_STATE_ENABLED) && pending->enabled) ||
+			(pending->committed & WLR_OUTPUT_STATE_MODE)) {
+		if (!wlr_scene_output_build_state(output->scene_output, pending, NULL)) {
+			sway_log(SWAY_ERROR, "Failed to render %s", wlr_output->name);
+			return false;
+		}
+	}
+
+	return wlr_output_test_state(wlr_output, pending);
+}
+
 static void queue_output_config(struct output_config *oc,
 		struct sway_output *output, struct wlr_output_state *pending) {
 	if (output == root->fallback_output) {
@@ -401,8 +433,10 @@ static void queue_output_config(struct output_config *oc,
 		return;
 	}
 
-	sway_log(SWAY_DEBUG, "Turning on output %s", wlr_output->name);
-	wlr_output_state_set_enabled(pending, true);
+	if (!wlr_output->enabled) {
+		sway_log(SWAY_DEBUG, "Turning on output %s", wlr_output->name);
+		wlr_output_state_set_enabled(pending, true);
+	}
 
 	if (oc && oc->drm_mode.type != 0 && oc->drm_mode.type != (uint32_t) -1) {
 		sway_log(SWAY_DEBUG, "Set %s modeline",
@@ -417,9 +451,9 @@ static void queue_output_config(struct output_config *oc,
 		sway_log(SWAY_DEBUG, "Set preferred mode");
 		struct wlr_output_mode *preferred_mode =
 			wlr_output_preferred_mode(wlr_output);
-		wlr_output_state_set_mode(pending, preferred_mode);
 
-		if (!wlr_output_test_state(wlr_output, pending)) {
+		wlr_output_state_set_mode(pending, preferred_mode);
+		if (!test(output, pending)) {
 			sway_log(SWAY_DEBUG, "Preferred mode rejected, "
 				"falling back to another mode");
 			struct wlr_output_mode *mode;
@@ -429,7 +463,7 @@ static void queue_output_config(struct output_config *oc,
 				}
 
 				wlr_output_state_set_mode(pending, mode);
-				if (wlr_output_test_state(wlr_output, pending)) {
+				if (test(output, pending)) {
 					break;
 				}
 			}
@@ -484,7 +518,7 @@ static void queue_output_config(struct output_config *oc,
 		sway_log(SWAY_DEBUG, "Set %s adaptive sync to %d", wlr_output->name,
 			oc->adaptive_sync);
 		wlr_output_state_set_adaptive_sync_enabled(pending, oc->adaptive_sync == 1);
-		if (oc->adaptive_sync == 1 && !wlr_output_test_state(wlr_output, pending)) {
+		if (oc->adaptive_sync == 1 && !test(output, pending)) {
 			sway_log(SWAY_DEBUG, "Adaptive sync failed, ignoring");
 			wlr_output_state_set_adaptive_sync_enabled(pending, false);
 		}
@@ -496,7 +530,7 @@ static void queue_output_config(struct output_config *oc,
 
 		for (size_t i = 0; fmts[i] != DRM_FORMAT_INVALID; i++) {
 			wlr_output_state_set_render_format(pending, fmts[i]);
-			if (wlr_output_test_state(wlr_output, pending)) {
+			if (test(output, pending)) {
 				break;
 			}
 
@@ -517,17 +551,52 @@ bool apply_output_config(struct output_config *oc, struct sway_output *output) {
 	// Flag to prevent the output mode event handler from calling us
 	output->enabling = (!oc || oc->enabled);
 
-	struct wlr_output_state pending = {0};
+	struct wlr_output_state pending;
+	wlr_output_state_init(&pending);
+	if (!wlr_output_state_copy(&pending, &output->pending)) {
+		sway_log(SWAY_ERROR, "Failed to copy output state for %s", wlr_output->name);
+		wlr_output_state_finish(&pending);
+		output->enabling = false;
+		return false;
+	}
+
 	queue_output_config(oc, output, &pending);
 
-	sway_log(SWAY_DEBUG, "Committing output %s", wlr_output->name);
-	if (!wlr_output_commit_state(wlr_output, &pending)) {
+	if (!test(output, &pending)) {
 		// Failed to commit output changes, maybe the output is missing a CRTC.
 		// Leave the output disabled for now and try again when the output gets
 		// the mode we asked for.
 		sway_log(SWAY_ERROR, "Failed to commit output %s", wlr_output->name);
+		wlr_output_state_finish(&pending);
 		output->enabling = false;
 		return false;
+	}
+
+	if (!wlr_output_state_copy(&output->pending, &pending)) {
+		sway_log(SWAY_ERROR, "Can't apply state to pending for %s", wlr_output->name);
+		wlr_output_state_finish(&pending);
+		output->enabling = false;
+		return false;
+	}
+
+	wlr_output_state_finish(&pending);
+
+	// if the output is not currently enabled that means that the render loop is not
+	// running. We must commit immediately in this case.
+	if (!wlr_output->enabled) {
+		if (!wlr_output_commit_state(wlr_output, &output->pending)) {
+			// Failed to commit output changes, maybe the output is missing a CRTC.
+			// Leave the output disabled for now and try again when the output gets
+			// the mode we asked for.
+			sway_log(SWAY_ERROR, "Failed to commit output %s", wlr_output->name);
+			output->enabling = false;
+			return false;
+		}
+
+		wlr_output_state_finish(&output->pending);
+		wlr_output_state_init(&output->pending);
+	} else {
+		wlr_output_schedule_frame(wlr_output);
 	}
 
 	output->enabling = false;
@@ -601,9 +670,12 @@ bool test_output_config(struct output_config *oc, struct sway_output *output) {
 		return false;
 	}
 
-	struct wlr_output_state pending = {0};
+	struct wlr_output_state pending;
+	wlr_output_state_init(&pending);
 	queue_output_config(oc, output, &pending);
-	return wlr_output_test_state(output->wlr_output, &pending);
+	bool success = test(output, &pending);
+	wlr_output_state_finish(&pending);
+	return success;
 }
 
 static void default_output_config(struct output_config *oc,

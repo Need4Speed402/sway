@@ -138,6 +138,7 @@ struct sway_output *output_create(struct wlr_output *wlr_output) {
 	output->scale_filter = SCALE_FILTER_NEAREST;
 
 	wl_signal_init(&output->events.disable);
+	wlr_output_state_init(&output->pending);
 
 	wl_list_insert(&root->all_outputs, &output->link);
 
@@ -280,6 +281,7 @@ void output_destroy(struct sway_output *output) {
 	list_free(output->workspaces);
 	list_free(output->current.workspaces);
 	wl_event_source_remove(output->repaint_timer);
+	wlr_output_state_finish(&output->pending);
 	free(output);
 }
 
