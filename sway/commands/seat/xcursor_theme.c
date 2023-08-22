@@ -2,6 +2,7 @@
 #include <string.h>
 #include "sway/commands.h"
 #include "sway/config.h"
+#include "sway/input/seat.h"
 
 struct cmd_results *seat_cmd_xcursor_theme(int argc, char **argv) {
 	struct cmd_results *error = NULL;
@@ -28,6 +29,10 @@ struct cmd_results *seat_cmd_xcursor_theme(int argc, char **argv) {
 	free(config->handler_context.seat_config->xcursor_theme.name);
 	config->handler_context.seat_config->xcursor_theme.name = strdup(theme_name);
 	config->handler_context.seat_config->xcursor_theme.size = size;
+
+	if (config->handler_context.seat) {
+		seat_configure_xcursor(config->handler_context.seat);
+	}
 
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }
