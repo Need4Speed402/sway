@@ -76,6 +76,7 @@ struct output_config *new_output_config(const char *name) {
 	oc->adaptive_sync = -1;
 	oc->render_bit_depth = RENDER_BIT_DEPTH_DEFAULT;
 	oc->power = -1;
+	oc->margin.top = -1;
 	return oc;
 }
 
@@ -139,6 +140,9 @@ void merge_output_config(struct output_config *dst, struct output_config *src) {
 	}
 	if (src->power != -1) {
 		dst->power = src->power;
+	}
+	if (src->margin.top != -1) {
+		dst->margin = src->margin;
 	}
 }
 

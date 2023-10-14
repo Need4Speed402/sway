@@ -297,11 +297,13 @@ void arrange_workspace(struct sway_workspace *workspace) {
 	sway_log(SWAY_DEBUG, "Arranging workspace '%s' at %f, %f", workspace->name,
 			workspace->x, workspace->y);
 	if (workspace->fullscreen) {
+		const struct side_gaps *margin = &find_output_config(output)->margin;
+
 		struct sway_container *fs = workspace->fullscreen;
-		fs->pending.x = output->lx;
-		fs->pending.y = output->ly;
-		fs->pending.width = output->width;
-		fs->pending.height = output->height;
+		fs->pending.x = output->lx + margin->left;
+		fs->pending.y = output->ly + margin->top;
+		fs->pending.width = output->width - margin->left - margin->right;
+		fs->pending.height = output->height - margin->top - margin->bottom;
 		arrange_container(fs);
 	} else {
 		struct wlr_box box;

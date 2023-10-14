@@ -481,6 +481,12 @@ static int container_get_gaps(struct sway_container *con) {
 static void arrange_fullscreen(struct wlr_scene_tree *tree,
 		struct sway_container *fs, struct sway_workspace *ws,
 		int width, int height) {
+	struct side_gaps margin = {0};
+
+	if (ws) {
+		margin = find_output_config(ws->output)->margin;
+	}
+
 	struct wlr_scene_node *fs_node;
 	if (fs->view) {
 		fs_node = &fs->view->scene_tree->node;
@@ -489,12 +495,15 @@ static void arrange_fullscreen(struct wlr_scene_tree *tree,
 		wlr_scene_node_set_enabled(&fs->scene_tree->node, false);
 	} else {
 		fs_node = &fs->scene_tree->node;
-		arrange_container(fs, width, height, true, container_get_gaps(fs));
+		arrange_container(fs,
+			width - margin.left - margin.right,
+			height - margin.top - margin.bottom,
+			true, container_get_gaps(fs));
 	}
 
 	wlr_scene_node_reparent(fs_node, tree);
 	wlr_scene_node_lower_to_bottom(fs_node);
-	wlr_scene_node_set_position(fs_node, 0, 0);
+	wlr_scene_node_set_position(fs_node, margin.left, margin.top);
 }
 
 static void arrange_workspace_floating(struct sway_workspace *ws) {
