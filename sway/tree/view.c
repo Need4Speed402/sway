@@ -266,13 +266,12 @@ void view_autoconfigure(struct sway_view *view) {
 			con->pending.fullscreen_mode != FULLSCREEN_GLOBAL) {
 		return;
 	}
-	struct sway_output *output = ws ? ws->output : NULL;
 
 	if (con->pending.fullscreen_mode == FULLSCREEN_WORKSPACE) {
-		con->pending.content_x = output->lx;
-		con->pending.content_y = output->ly;
-		con->pending.content_width = output->width;
-		con->pending.content_height = output->height;
+		con->pending.content_x = con->pending.x;
+		con->pending.content_y = con->pending.y;
+		con->pending.content_width = con->pending.width;
+		con->pending.content_height = con->pending.height;
 		return;
 	} else if (con->pending.fullscreen_mode == FULLSCREEN_GLOBAL) {
 		con->pending.content_x = root->x;
