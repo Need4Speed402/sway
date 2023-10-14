@@ -66,9 +66,8 @@ static void seat_node_destroy(struct sway_seat_node *seat_node) {
 }
 
 void seat_destroy(struct sway_seat *seat) {
-	if (seat == config->handler_context.seat) {
-		config->handler_context.seat = input_manager_get_default_seat();
-	}
+	seatop_end(seat);
+
 	struct sway_seat_device *seat_device, *next;
 	wl_list_for_each_safe(seat_device, next, &seat->devices, link) {
 		seat_device_destroy(seat_device);
@@ -85,6 +84,7 @@ void seat_destroy(struct sway_seat *seat) {
 	wl_list_remove(&seat->start_drag.link);
 	wl_list_remove(&seat->request_set_selection.link);
 	wl_list_remove(&seat->request_set_primary_selection.link);
+	wl_list_remove(&seat->wlr_seat_destroy.link);
 	wl_list_remove(&seat->link);
 	wlr_seat_destroy(seat->wlr_seat);
 	for (int i = 0; i < seat->deferred_bindings->length; i++) {
@@ -94,6 +94,12 @@ void seat_destroy(struct sway_seat *seat) {
 	list_free(seat->deferred_bindings);
 	free(seat->prev_workspace_name);
 	free(seat);
+}
+
+static void seat_handle_wlr_seat_destroy(struct wl_listener *listener, void *data) {
+	struct sway_seat *seat = wl_container_of(listener, seat, wlr_seat_destroy);
+	seat->wlr_seat = NULL;
+	seat_destroy(seat);
 }
 
 void seat_idle_notify_activity(struct sway_seat *seat,
@@ -568,6 +574,9 @@ struct sway_seat *seat_create(const char *seat_name) {
 		&seat->request_set_primary_selection);
 	seat->request_set_primary_selection.notify =
 		handle_request_set_primary_selection;
+
+	wl_signal_add(&seat->wlr_seat->events.destroy, &seat->wlr_seat_destroy);
+	seat->wlr_seat_destroy.notify = seat_handle_wlr_seat_destroy;
 
 	wl_list_init(&seat->keyboard_groups);
 	wl_list_init(&seat->keyboard_shortcuts_inhibitors);

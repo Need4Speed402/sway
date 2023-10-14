@@ -310,6 +310,13 @@ void server_fini(struct sway_server *server) {
 #endif
 	wl_display_destroy_clients(server->wl_display);
 	wl_display_destroy(server->wl_display);
+	input_manager_destroy(server->input);
+	wlr_output_manager_finish(&server->output_manager);
+
+	root->fallback_output->wlr_output = NULL;
+	root->fallback_output->node.destroying = true;
+	output_destroy(root->fallback_output);
+
 	list_free(server->dirty_nodes);
 }
 

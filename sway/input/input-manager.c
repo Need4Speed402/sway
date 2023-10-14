@@ -189,15 +189,7 @@ void input_manager_verify_fallback_seat(void) {
 	}
 }
 
-static void handle_device_destroy(struct wl_listener *listener, void *data) {
-	struct wlr_input_device *device = data;
-
-	struct sway_input_device *input_device = input_sway_device_from_wlr(device);
-
-	if (!sway_assert(input_device, "could not find sway device")) {
-		return;
-	}
-
+static void device_destroy(struct sway_input_device *input_device) {
 	sway_log(SWAY_DEBUG, "removing device: '%s'",
 		input_device->identifier);
 
@@ -212,6 +204,16 @@ static void handle_device_destroy(struct wl_listener *listener, void *data) {
 	wl_list_remove(&input_device->device_destroy.link);
 	free(input_device->identifier);
 	free(input_device);
+}
+
+static void handle_device_destroy(struct wl_listener *listener, void *data) {
+	struct wlr_input_device *device = data;
+	struct sway_input_device *input_device = input_sway_device_from_wlr(device);
+	if (!sway_assert(input_device, "could not find sway device")) {
+		return;
+	}
+
+	device_destroy(input_device);
 }
 
 static void handle_new_input(struct wl_listener *listener, void *data) {
@@ -498,6 +500,28 @@ struct sway_input_manager *input_manager_create(struct sway_server *server) {
 	input->pointer_gestures = wlr_pointer_gestures_v1_create(server->wl_display);
 
 	return input;
+}
+
+void input_manager_destroy(struct sway_input_manager *input) {
+	config->handler_context.seat = NULL;
+
+	struct sway_seat *seat, *seat_tmp;
+	wl_list_for_each_safe(seat, seat_tmp, &input->seats, link) {
+		seat_destroy(seat);
+	}
+
+	struct sway_input_device *input_device, *input_device_tmp;
+	wl_list_for_each_safe(input_device, input_device_tmp, &input->devices, link) {
+		device_destroy(input_device);
+	}
+
+	wl_list_remove(&input->new_input.link);
+	wl_list_remove(&input->virtual_pointer_new.link);
+	wl_list_remove(&input->inhibit_activate.link);
+	wl_list_remove(&input->inhibit_deactivate.link);
+	wl_list_remove(&input->keyboard_shortcuts_inhibit_new_inhibitor.link);
+
+	free(input);
 }
 
 bool input_manager_has_focus(struct sway_node *node) {

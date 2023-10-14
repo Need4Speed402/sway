@@ -788,10 +788,6 @@ static bool repeat_info_match(struct sway_keyboard *a, struct wlr_keyboard *b) {
 		a->repeat_delay == b->repeat_info.delay;
 }
 
-static void destroy_empty_wlr_keyboard_group(void *data) {
-	wlr_keyboard_group_destroy(data);
-}
-
 static void sway_keyboard_group_remove(struct sway_keyboard *keyboard) {
 	struct sway_input_device *device = keyboard->seat_device->input_device;
 	struct wlr_keyboard_group *wlr_group = keyboard->wlr->group;
@@ -805,7 +801,7 @@ static void sway_keyboard_group_remove(struct sway_keyboard *keyboard) {
 		sway_log(SWAY_DEBUG, "Destroying empty keyboard group %p",
 				wlr_group);
 		struct sway_keyboard_group *sway_group = wlr_group->data;
-		wlr_group->data = NULL;
+
 		wl_list_remove(&sway_group->link);
 		wl_list_remove(&sway_group->keyboard_key.link);
 		wl_list_remove(&sway_group->keyboard_modifiers.link);
@@ -816,10 +812,7 @@ static void sway_keyboard_group_remove(struct sway_keyboard *keyboard) {
 		free(sway_group->seat_device);
 		free(sway_group);
 
-		// To prevent use-after-free conditions when handling key events, defer
-		// freeing the wlr_keyboard_group until idle
-		wl_event_loop_add_idle(server.wl_event_loop,
-				destroy_empty_wlr_keyboard_group, wlr_group);
+		wlr_keyboard_group_destroy(wlr_group);
 	}
 }
 
@@ -1081,7 +1074,10 @@ void sway_keyboard_destroy(struct sway_keyboard *keyboard) {
 	if (!keyboard) {
 		return;
 	}
-	if (keyboard->wlr->group) {
+
+	keyboard->seat_device->keyboard = NULL;
+
+	if (keyboard->wlr && keyboard->wlr->group) {
 		sway_keyboard_group_remove(keyboard);
 	}
 	struct wlr_seat *wlr_seat = keyboard->seat_device->sway_seat->wlr_seat;

@@ -280,7 +280,9 @@ void output_destroy(struct sway_output *output) {
 	destroy_scene_layers(output);
 	list_free(output->workspaces);
 	list_free(output->current.workspaces);
-	wl_event_source_remove(output->repaint_timer);
+	if (output->repaint_timer) {
+		wl_event_source_remove(output->repaint_timer);
+	}
 	wlr_output_state_finish(&output->pending);
 	free(output);
 }

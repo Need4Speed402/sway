@@ -190,6 +190,10 @@ static void destroy_removed_seats(struct sway_config *old_config,
 				seat_name_cmp, seat_config->name) < 0) {
 			seat = input_manager_get_seat(seat_config->name, false);
 			if (seat) {
+				if (seat == config->handler_context.seat) {
+					config->handler_context.seat = input_manager_get_default_seat();
+				}
+
 				seat_destroy(seat);
 			}
 		}
