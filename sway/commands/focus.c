@@ -13,6 +13,7 @@
 #include "sway/tree/workspace.h"
 #include "stringop.h"
 #include "util.h"
+#include "list.h"
 
 static bool get_direction_from_next_prev(struct sway_container *container,
 		struct sway_seat *seat, const char *name, enum wlr_direction *out) {
@@ -361,6 +362,53 @@ static struct cmd_results *focus_child(void) {
 	return cmd_results_new(CMD_SUCCESS, NULL);
 }
 
+static struct cmd_results *focus_tab_index(int argc, char **argv) {
+	if (!argc) {
+		return cmd_results_new(CMD_INVALID, "Expected 'focus tab_index <index>'.");
+	}
+
+	struct sway_seat *seat = config->handler_context.seat;
+	struct sway_container *con = config->handler_context.container;
+
+	int index = atoi(argv[0]);
+	if (index < 0) {
+		return cmd_results_new(CMD_INVALID, "Expected positive index.");
+	}
+
+	while (con) {
+		if (con->current.layout == L_TABBED) {
+			list_t *children = con->current.children;
+			struct sway_container *focus;
+			if (index >= children->length) {
+				focus = children->items[children->length - 1];
+			} else {
+				focus = children->items[index];
+			}
+
+			while (focus->current.focused_inactive_child) {
+				focus = focus->current.focused_inactive_child;
+			}
+
+			seat_set_focus(seat, &focus->node);
+			seat_consider_warp_to_focus(seat);
+			break;
+		}
+
+		if (con->current.fullscreen_mode) {
+			break;
+		}
+
+		struct sway_node *parent = node_get_parent(&con->node);
+		if (parent && parent->type != N_CONTAINER) {
+			break;
+		}
+
+		con = parent->sway_container;
+	}
+
+	return cmd_results_new(CMD_SUCCESS, NULL);
+}
+
 struct cmd_results *cmd_focus(int argc, char **argv) {
 	if (config->reading || !config->active) {
 		return cmd_results_new(CMD_DEFER, NULL);
@@ -418,6 +466,10 @@ struct cmd_results *cmd_focus(int argc, char **argv) {
 	}
 	if (strcasecmp(argv[0], "child") == 0) {
 		return focus_child();
+	}
+	if (strcasecmp(argv[0], "tab_index") == 0) {
+		argc--; argv++;
+		return focus_tab_index(argc, argv);
 	}
 
 	enum wlr_direction direction = 0;
