@@ -242,6 +242,21 @@ static void destroy(struct sway_view *view) {
 	free(xdg_shell_view);
 }
 
+static bool get_geometry(struct sway_view *view, struct wlr_box *box) {
+	if (xdg_shell_view_from_view(view) == NULL) {
+		return false;
+	}
+
+	// We can reach here without a toplevel during a transaction of a surface
+	// that was destroyed by the client.
+	if (!view->wlr_xdg_toplevel) {
+		return false;
+	}
+
+	wlr_xdg_surface_get_geometry(view->wlr_xdg_toplevel->base, box);
+	return true;
+}
+
 static const struct sway_view_impl view_impl = {
 	.get_constraints = get_constraints,
 	.get_string_prop = get_string_prop,
@@ -255,6 +270,7 @@ static const struct sway_view_impl view_impl = {
 	.close = _close,
 	.close_popups = close_popups,
 	.destroy = destroy,
+	.get_geometry = get_geometry,
 };
 
 static void handle_commit(struct wl_listener *listener, void *data) {

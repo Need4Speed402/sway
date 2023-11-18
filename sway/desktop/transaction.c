@@ -440,6 +440,13 @@ static void arrange_container(struct sway_container *con,
 		wlr_scene_node_reparent(&con->view->scene_tree->node, con->content_tree);
 		wlr_scene_node_set_position(&con->view->scene_tree->node,
 			border_left, border_top);
+
+		struct wlr_box clip;
+		if (view_get_geometry(con->view, &clip)) {
+			clip.width = width - border_right - border_left;
+			clip.height = height - border_top - border_bottom;
+			wlr_scene_subsurface_tree_set_clip(&con->view->content_tree->node, &clip);
+		}
 	} else {
 		// make sure to disable the title bar if the parent is not managing it
 		if (title_bar) {
@@ -479,6 +486,13 @@ static void arrange_fullscreen(struct wlr_scene_tree *tree,
 
 		// if we only care about the view, disable any decorations
 		wlr_scene_node_set_enabled(&fs->scene_tree->node, false);
+
+		struct wlr_box clip;
+		if (view_get_geometry(fs->view, &clip)) {
+			clip.width = width;
+			clip.height = height;
+			wlr_scene_subsurface_tree_set_clip(&fs->view->content_tree->node, &clip);
+		}
 	} else {
 		fs_node = &fs->scene_tree->node;
 		arrange_container(fs, width, height, true, container_get_gaps(fs));

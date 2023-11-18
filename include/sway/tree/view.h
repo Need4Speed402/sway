@@ -51,6 +51,7 @@ struct sway_view_impl {
 	void (*close)(struct sway_view *view);
 	void (*close_popups)(struct sway_view *view);
 	void (*destroy)(struct sway_view *view);
+	bool (*get_geometry)(struct sway_view *view, struct wlr_box *box);
 };
 
 struct sway_view {
@@ -315,5 +316,7 @@ bool view_is_transient_for(struct sway_view *child, struct sway_view *ancestor);
 void view_assign_ctx(struct sway_view *view, struct launcher_ctx *ctx);
 
 void view_send_frame_done(struct sway_view *view);
+
+bool view_get_geometry(struct sway_view *view, struct wlr_box *box);
 
 #endif

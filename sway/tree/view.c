@@ -187,6 +187,14 @@ uint32_t view_configure(struct sway_view *view, double lx, double ly, int width,
 	return 0;
 }
 
+bool view_get_geometry(struct sway_view *view, struct wlr_box *box) {
+	if (view->impl->get_geometry) {
+		return view->impl->get_geometry(view, box);
+	}
+
+	return false;
+}
+
 bool view_inhibit_idle(struct sway_view *view) {
 	struct sway_idle_inhibitor_v1 *user_inhibitor =
 		sway_idle_inhibit_v1_user_inhibitor_for_view(view);

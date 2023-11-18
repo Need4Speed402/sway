@@ -391,6 +391,20 @@ static void get_constraints(struct sway_view *view, double *min_width,
 	*max_height = size_hints->max_height > 0 ? size_hints->max_height : DBL_MAX;
 }
 
+static bool get_geometry(struct sway_view *view, struct wlr_box *box) {
+	struct sway_xwayland_view *xwayland_view = xwayland_view_from_view(view);
+	if (xwayland_view == NULL) {
+		return false;
+	}
+
+	if (xwayland_view->surface_tree) {
+		*box = (struct wlr_box){0};
+		return true;
+	}
+
+	return false;
+}
+
 static const struct sway_view_impl view_impl = {
 	.get_constraints = get_constraints,
 	.get_string_prop = get_string_prop,
@@ -401,6 +415,7 @@ static const struct sway_view_impl view_impl = {
 	.set_fullscreen = set_fullscreen,
 	.wants_floating = wants_floating,
 	.is_transient_for = is_transient_for,
+	.get_geometry = get_geometry,
 	.close = _close,
 	.destroy = destroy,
 };
