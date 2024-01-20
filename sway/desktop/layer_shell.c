@@ -74,7 +74,7 @@ static void arrange_surface(struct sway_output *output, const struct wlr_box *fu
 
 void arrange_layers(struct sway_output *output) {
 	struct wlr_box usable_area = { 0 };
-	wlr_output_effective_resolution(output->wlr_output,
+	wlr_output_effective_resolution(output->wlr_output, NULL,
 			&usable_area.width, &usable_area.height);
 	const struct wlr_box full_area = usable_area;
 
