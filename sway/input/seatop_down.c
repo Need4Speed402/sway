@@ -1,5 +1,4 @@
 #include <float.h>
-#include <wlr/types/wlr_cursor.h>
 #include <wlr/types/wlr_tablet_v2.h>
 #include <wlr/types/wlr_touch.h>
 #include "sway/input/cursor.h"
@@ -157,8 +156,8 @@ static void handle_button(struct sway_seat *seat, uint32_t time_msec,
 static void handle_pointer_motion(struct sway_seat *seat, uint32_t time_msec) {
 	struct seatop_down_event *e = seat->seatop_data;
 	if (seat_is_input_allowed(seat, e->surface)) {
-		double moved_x = seat->cursor->cursor->x - e->ref_lx;
-		double moved_y = seat->cursor->cursor->y - e->ref_ly;
+		double moved_x = seat->cursor->x - e->ref_lx;
+		double moved_y = seat->cursor->y - e->ref_ly;
 		double sx = e->ref_con_lx + moved_x;
 		double sy = e->ref_con_ly + moved_y;
 		wlr_seat_pointer_notify_motion(seat->wlr_seat, time_msec, sx, sy);
@@ -178,8 +177,8 @@ static void handle_tablet_tool_motion(struct sway_seat *seat,
 		struct sway_tablet_tool *tool, uint32_t time_msec) {
 	struct seatop_down_event *e = seat->seatop_data;
 	if (seat_is_input_allowed(seat, e->surface)) {
-		double moved_x = seat->cursor->cursor->x - e->ref_lx;
-		double moved_y = seat->cursor->cursor->y - e->ref_ly;
+		double moved_x = seat->cursor->x - e->ref_lx;
+		double moved_y = seat->cursor->y - e->ref_ly;
 		double sx = e->ref_con_lx + moved_x;
 		double sy = e->ref_con_ly + moved_y;
 		wlr_tablet_v2_tablet_tool_notify_motion(tool->tablet_v2_tool, sx, sy);
@@ -252,8 +251,8 @@ void seatop_begin_down_on_surface(struct sway_seat *seat,
 	e->surface = surface;
 	wl_signal_add(&e->surface->events.destroy, &e->surface_destroy);
 	e->surface_destroy.notify = handle_destroy;
-	e->ref_lx = seat->cursor->cursor->x;
-	e->ref_ly = seat->cursor->cursor->y;
+	e->ref_lx = seat->cursor->x;
+	e->ref_ly = seat->cursor->y;
 	e->ref_con_lx = sx;
 	e->ref_con_ly = sy;
 	wl_list_init(&e->point_events);

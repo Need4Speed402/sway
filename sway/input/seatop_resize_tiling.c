@@ -1,4 +1,3 @@
-#include <wlr/types/wlr_cursor.h>
 #include <wlr/util/edges.h>
 #include "sway/commands.h"
 #include "sway/desktop/transaction.h"
@@ -76,8 +75,8 @@ static void handle_pointer_motion(struct sway_seat *seat, uint32_t time_msec) {
 	struct seatop_resize_tiling_event *e = seat->seatop_data;
 	int amount_x = 0;
 	int amount_y = 0;
-	int moved_x = seat->cursor->cursor->x - e->ref_lx;
-	int moved_y = seat->cursor->cursor->y - e->ref_ly;
+	int moved_x = seat->cursor->x - e->ref_lx;
+	int moved_y = seat->cursor->y - e->ref_ly;
 
 	if (e->h_con) {
 		if (e->edge & WLR_EDGE_LEFT) {
@@ -131,8 +130,8 @@ void seatop_begin_resize_tiling(struct sway_seat *seat,
 	e->con = con;
 	e->edge = edge;
 
-	e->ref_lx = seat->cursor->cursor->x;
-	e->ref_ly = seat->cursor->cursor->y;
+	e->ref_lx = seat->cursor->x;
+	e->ref_ly = seat->cursor->y;
 
 	if (edge & (WLR_EDGE_LEFT | WLR_EDGE_RIGHT)) {
 		e->edge_x = edge & (WLR_EDGE_LEFT | WLR_EDGE_RIGHT);

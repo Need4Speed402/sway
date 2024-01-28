@@ -1,5 +1,4 @@
 #include <limits.h>
-#include <wlr/types/wlr_cursor.h>
 #include <wlr/util/edges.h>
 #include "sway/desktop/transaction.h"
 #include "sway/input/cursor.h"
@@ -37,8 +36,8 @@ static void handle_end(struct sway_seat *seat) {
 
 static void handle_motion_prethreshold(struct sway_seat *seat) {
 	struct seatop_move_tiling_event *e = seat->seatop_data;
-	double cx = seat->cursor->cursor->x;
-	double cy = seat->cursor->cursor->y;
+	double cx = seat->cursor->x;
+	double cy = seat->cursor->y;
 	double sx = e->ref_lx;
 	double sy = e->ref_ly;
 
@@ -115,7 +114,7 @@ static void split_border(double pos, int offset, int len, int n_children,
 }
 
 static bool split_titlebar(struct sway_node *node, struct sway_container *avoid,
-		struct wlr_cursor *cursor, struct wlr_box *title_box, bool *after) {
+		struct sway_cursor *cursor, struct wlr_box *title_box, bool *after) {
 	struct sway_container *con = node->sway_container;
 	struct sway_node *parent = &con->pending.parent->node;
 	int title_height = container_titlebar_height();
@@ -164,7 +163,7 @@ static void handle_motion_postthreshold(struct sway_seat *seat) {
 	double sx, sy;
 	struct sway_cursor *cursor = seat->cursor;
 	struct sway_node *node = node_at_coords(seat,
-			cursor->cursor->x, cursor->cursor->y, &surface, &sx, &sy);
+			cursor->x, cursor->y, &surface, &sx, &sy);
 
 	if (!node) {
 		// Eg. hovered over a layer surface such as swaybar
@@ -203,7 +202,7 @@ static void handle_motion_postthreshold(struct sway_seat *seat) {
 	// Check if the cursor is over a tilebar only if the destination
 	// container is not a descendant of the source container.
 	if (!surface && !container_has_ancestor(con, e->con) &&
-			split_titlebar(node, e->con, cursor->cursor,
+			split_titlebar(node, e->con, cursor,
 				&drop_box, &e->insert_after_target)) {
 		// Don't allow dropping over the source container's titlebar
 		// to give users a chance to cancel a drag operation.
@@ -232,19 +231,19 @@ static void handle_motion_postthreshold(struct sway_seat *seat) {
 		struct wlr_box box;
 		node_get_box(node_get_parent(&con->node), &box);
 		if (layout == L_HORIZ || layout == L_TABBED) {
-			if (cursor->cursor->y < thresh_top) {
+			if (cursor->y < thresh_top) {
 				edge = WLR_EDGE_TOP;
 				box.height = thresh_top - box.y;
-			} else if (cursor->cursor->y > thresh_bottom) {
+			} else if (cursor->y > thresh_bottom) {
 				edge = WLR_EDGE_BOTTOM;
 				box.height = box.y + box.height - thresh_bottom;
 				box.y = thresh_bottom;
 			}
 		} else if (layout == L_VERT || layout == L_STACKED) {
-			if (cursor->cursor->x < thresh_left) {
+			if (cursor->x < thresh_left) {
 				edge = WLR_EDGE_LEFT;
 				box.width = thresh_left - box.x;
-			} else if (cursor->cursor->x > thresh_right) {
+			} else if (cursor->x > thresh_right) {
 				edge = WLR_EDGE_RIGHT;
 				box.width = box.x + box.width - thresh_right;
 				box.x = thresh_right;
@@ -276,19 +275,19 @@ static void handle_motion_postthreshold(struct sway_seat *seat) {
 	size_t closest_dist = INT_MAX;
 	size_t dist;
 	e->target_edge = WLR_EDGE_NONE;
-	if ((dist = cursor->cursor->y - con->pending.y) < closest_dist) {
+	if ((dist = cursor->y - con->pending.y) < closest_dist) {
 		closest_dist = dist;
 		e->target_edge = WLR_EDGE_TOP;
 	}
-	if ((dist = cursor->cursor->x - con->pending.x) < closest_dist) {
+	if ((dist = cursor->x - con->pending.x) < closest_dist) {
 		closest_dist = dist;
 		e->target_edge = WLR_EDGE_LEFT;
 	}
-	if ((dist = con->pending.x + con->pending.width - cursor->cursor->x) < closest_dist) {
+	if ((dist = con->pending.x + con->pending.width - cursor->x) < closest_dist) {
 		closest_dist = dist;
 		e->target_edge = WLR_EDGE_RIGHT;
 	}
-	if ((dist = con->pending.y + con->pending.height - cursor->cursor->y) < closest_dist) {
+	if ((dist = con->pending.y + con->pending.height - cursor->y) < closest_dist) {
 		closest_dist = dist;
 		e->target_edge = WLR_EDGE_BOTTOM;
 	}
@@ -461,8 +460,8 @@ void seatop_begin_move_tiling_threshold(struct sway_seat *seat,
 	}
 
 	e->con = con;
-	e->ref_lx = seat->cursor->cursor->x;
-	e->ref_ly = seat->cursor->cursor->y;
+	e->ref_lx = seat->cursor->x;
+	e->ref_ly = seat->cursor->y;
 
 	seat->seatop_impl = &seatop_impl;
 	seat->seatop_data = e;

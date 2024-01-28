@@ -3,7 +3,6 @@
 #include <stdbool.h>
 #include <string.h>
 #include <strings.h>
-#include <wlr/types/wlr_cursor.h>
 #include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_output_layout.h>
 #include "sway/commands.h"
@@ -781,7 +780,7 @@ static struct cmd_results *cmd_move_to_position_pointer(
 	if (!seat->cursor) {
 		return cmd_results_new(CMD_FAILURE, "No cursor device");
 	}
-	struct wlr_cursor *cursor = seat->cursor->cursor;
+	struct sway_cursor *cursor = seat->cursor;
 	/* Determine where to put the window. */
 	double lx = cursor->x - container->pending.width / 2;
 	double ly = cursor->y - container->pending.height / 2;

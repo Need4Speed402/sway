@@ -427,8 +427,9 @@ void handle_virtual_pointer(struct wl_listener *listener, void *data) {
 	seat_add_device(seat, input_device);
 
 	if (event->suggested_output) {
-		wlr_cursor_map_input_to_output(seat->cursor->cursor, device,
-			event->suggested_output);
+		// CURSOR TODO
+		//wlr_cursor_map_input_to_output(seat->cursor->cursor, device,
+		//	event->suggested_output);
 	}
 }
 

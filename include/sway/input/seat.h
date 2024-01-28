@@ -62,6 +62,9 @@ struct sway_seat_device {
 	struct sway_switch *switch_device;
 	struct sway_tablet *tablet;
 	struct sway_tablet_pad *tablet_pad;
+	struct sway_cursor_pointer *cursor_pointer;
+	struct sway_cursor_touch *cursor_touch;
+	struct sway_cursor_tablet *cursor_tablet;
 	struct wl_list link; // sway_seat::devices
 };
 

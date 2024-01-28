@@ -1,6 +1,5 @@
 #include <float.h>
 #include <libevdev/libevdev.h>
-#include <wlr/types/wlr_cursor.h>
 #include <wlr/types/wlr_subcompositor.h>
 #include <wlr/types/wlr_tablet_v2.h>
 #include <wlr/types/wlr_xcursor_manager.h>
@@ -87,16 +86,16 @@ static enum wlr_edges find_edge(struct sway_container *cont,
 	}
 
 	enum wlr_edges edge = 0;
-	if (cursor->cursor->x < cont->pending.x + cont->pending.border_thickness) {
+	if (cursor->x < cont->pending.x + cont->pending.border_thickness) {
 		edge |= WLR_EDGE_LEFT;
 	}
-	if (cursor->cursor->y < cont->pending.y + cont->pending.border_thickness) {
+	if (cursor->y < cont->pending.y + cont->pending.border_thickness) {
 		edge |= WLR_EDGE_TOP;
 	}
-	if (cursor->cursor->x >= cont->pending.x + cont->pending.width - cont->pending.border_thickness) {
+	if (cursor->x >= cont->pending.x + cont->pending.width - cont->pending.border_thickness) {
 		edge |= WLR_EDGE_RIGHT;
 	}
-	if (cursor->cursor->y >= cont->pending.y + cont->pending.height - cont->pending.border_thickness) {
+	if (cursor->y >= cont->pending.y + cont->pending.height - cont->pending.border_thickness) {
 		edge |= WLR_EDGE_BOTTOM;
 	}
 
@@ -224,7 +223,7 @@ static void handle_tablet_tool_tip(struct sway_seat *seat,
 	struct wlr_surface *surface = NULL;
 	double sx, sy;
 	struct sway_node *node = node_at_coords(seat,
-		cursor->cursor->x, cursor->cursor->y, &surface, &sx, &sy);
+		cursor->x, cursor->y, &surface, &sx, &sy);
 
 	if (!sway_assert(surface,
 			"Expected null-surface tablet input to route through pointer emulation")) {
@@ -337,7 +336,7 @@ static void handle_button(struct sway_seat *seat, uint32_t time_msec,
 	struct wlr_surface *surface = NULL;
 	double sx, sy;
 	struct sway_node *node = node_at_coords(seat,
-			cursor->cursor->x, cursor->cursor->y, &surface, &sx, &sy);
+			cursor->x, cursor->y, &surface, &sx, &sy);
 
 	struct sway_container *cont = node && node->type == N_CONTAINER ?
 		node->sway_container : NULL;
@@ -410,9 +409,9 @@ static void handle_button(struct sway_seat *seat, uint32_t time_msec,
 			BTN_LEFT : BTN_RIGHT;
 		if (button == btn_resize) {
 			edge = 0;
-			edge |= cursor->cursor->x > cont->pending.x + cont->pending.width / 2 ?
+			edge |= cursor->x > cont->pending.x + cont->pending.width / 2 ?
 				WLR_EDGE_RIGHT : WLR_EDGE_LEFT;
-			edge |= cursor->cursor->y > cont->pending.y + cont->pending.height / 2 ?
+			edge |= cursor->y > cont->pending.y + cont->pending.height / 2 ?
 				WLR_EDGE_BOTTOM : WLR_EDGE_TOP;
 
 			const char *image = NULL;
@@ -478,9 +477,9 @@ static void handle_button(struct sway_seat *seat, uint32_t time_msec,
 		if (mod_pressed && button == btn_resize) {
 			struct sway_container *floater = container_toplevel_ancestor(cont);
 			edge = 0;
-			edge |= cursor->cursor->x > floater->pending.x + floater->pending.width / 2 ?
+			edge |= cursor->x > floater->pending.x + floater->pending.width / 2 ?
 				WLR_EDGE_RIGHT : WLR_EDGE_LEFT;
-			edge |= cursor->cursor->y > floater->pending.y + floater->pending.height / 2 ?
+			edge |= cursor->y > floater->pending.y + floater->pending.height / 2 ?
 				WLR_EDGE_BOTTOM : WLR_EDGE_TOP;
 			seat_set_focus_container(seat, floater);
 			seatop_begin_resize_floating(seat, floater, edge);
@@ -547,14 +546,14 @@ static void check_focus_follows_mouse(struct sway_seat *seat,
 	// If it's on another output, focus the active workspace there.
 	if (!hovered_node) {
 		struct wlr_output *wlr_output = wlr_output_layout_output_at(
-				root->output_layout, seat->cursor->cursor->x, seat->cursor->cursor->y);
+				root->output_layout, seat->cursor->x, seat->cursor->y);
 		if (wlr_output == NULL) {
 			return;
 		}
 
 		struct wlr_surface *surface = NULL;
 		double sx, sy;
-		node_at_coords(seat, seat->cursor->cursor->x, seat->cursor->cursor->y,
+		node_at_coords(seat, seat->cursor->x, seat->cursor->y,
 				&surface, &sx, &sy);
 
 		// Focus topmost layer surface
@@ -610,7 +609,7 @@ static void handle_pointer_motion(struct sway_seat *seat, uint32_t time_msec) {
 	struct wlr_surface *surface = NULL;
 	double sx, sy;
 	struct sway_node *node = node_at_coords(seat,
-			cursor->cursor->x, cursor->cursor->y, &surface, &sx, &sy);
+			cursor->x, cursor->y, &surface, &sx, &sy);
 
 	if (config->focus_follows_mouse != FOLLOWS_NO) {
 		check_focus_follows_mouse(seat, e, node);
@@ -639,7 +638,7 @@ static void handle_tablet_tool_motion(struct sway_seat *seat,
 	struct wlr_surface *surface = NULL;
 	double sx, sy;
 	struct sway_node *node = node_at_coords(seat,
-			cursor->cursor->x, cursor->cursor->y, &surface, &sx, &sy);
+			cursor->x, cursor->y, &surface, &sx, &sy);
 
 	if (config->focus_follows_mouse != FOLLOWS_NO) {
 		check_focus_follows_mouse(seat, e, node);
@@ -682,8 +681,8 @@ static void handle_touch_down(struct sway_seat *seat,
 		cursor->simulating_pointer_from_touch = true;
 		cursor->pointer_touch_id = seat->touch_id;
 		double dx, dy;
-		dx = seat->touch_x - cursor->cursor->x;
-		dy = seat->touch_y - cursor->cursor->y;
+		dx = seat->touch_x - cursor->x;
+		dy = seat->touch_y - cursor->y;
 		pointer_motion(cursor, event->time_msec, &event->touch->base, dx, dy,
 				dx, dy);
 		dispatch_cursor_button(cursor, &event->touch->base, event->time_msec,
@@ -720,14 +719,14 @@ static void handle_pointer_axis(struct sway_seat *seat,
 	struct wlr_surface *surface = NULL;
 	double sx, sy;
 	struct sway_node *node = node_at_coords(seat,
-			cursor->cursor->x, cursor->cursor->y, &surface, &sx, &sy);
+			cursor->x, cursor->y, &surface, &sx, &sy);
 	struct sway_container *cont = node && node->type == N_CONTAINER ?
 		node->sway_container : NULL;
 	enum wlr_edges edge = cont ? find_edge(cont, surface, cursor) : WLR_EDGE_NONE;
 	bool on_border = edge != WLR_EDGE_NONE;
 	bool on_titlebar = cont && !on_border && !surface;
 	bool on_titlebar_border = cont && on_border &&
-		cursor->cursor->y < cont->pending.content_y;
+		cursor->y < cont->pending.content_y;
 	bool on_contents = cont && !on_border && surface;
 	bool on_workspace = node && node->type == N_WORKSPACE;
 	float scroll_factor =
@@ -1112,7 +1111,7 @@ static void handle_rebase(struct sway_seat *seat, uint32_t time_msec) {
 	struct wlr_surface *surface = NULL;
 	double sx = 0.0, sy = 0.0;
 	e->previous_node = node_at_coords(seat,
-			cursor->cursor->x, cursor->cursor->y, &surface, &sx, &sy);
+			cursor->x, cursor->y, &surface, &sx, &sy);
 
 	if (surface) {
 		if (seat_is_input_allowed(seat, surface)) {

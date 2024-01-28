@@ -2,6 +2,7 @@
 #define _SWAY_INPUT_CURSOR_H
 #include <stdbool.h>
 #include <stdint.h>
+#include <wlr/types/wlr_scene.h>
 #include <wlr/types/wlr_pointer_constraints_v1.h>
 #include <wlr/types/wlr_pointer_gestures_v1.h>
 #include <wlr/types/wlr_compositor.h>
@@ -17,7 +18,6 @@
 
 struct sway_cursor {
 	struct sway_seat *seat;
-	struct wlr_cursor *cursor;
 	struct {
 		double x, y;
 		struct sway_node *node;
@@ -27,13 +27,43 @@ struct sway_cursor {
 	struct wl_list tablet_pads;
 
 	const char *image;
-	struct wl_client *image_client;
-	struct wlr_surface *image_surface;
-	int hotspot_x, hotspot_y;
 
 	struct wlr_pointer_constraint_v1 *active_constraint;
 	pixman_region32_t confine; // invalid if active_constraint == NULL
 	bool active_confine_requires_warp;
+	
+	bool simulating_pointer_from_touch;
+	bool pointer_touch_up;
+	int32_t pointer_touch_id;
+
+	bool simulating_pointer_from_tool_tip;
+	bool simulating_pointer_from_tool_button;
+	uint32_t tool_buttons;
+
+	struct wl_listener request_set_cursor;
+
+	struct wl_listener constraint_commit;
+
+	struct wl_event_source *hide_source;
+	// This field is just a cache of the field in seat_config in order to avoid
+	// costly seat_config lookups on every keypress. HIDE_WHEN_TYPING_DEFAULT
+	// indicates that there is no cached value.
+	enum seat_config_hide_cursor_when_typing hide_when_typing;
+
+	size_t pressed_button_count;
+
+	struct wlr_scene_tree *scene;
+	double x, y;
+};
+
+struct sway_cursor_constraints {
+	struct wlr_box box;
+	struct sway_output *output;
+};
+
+struct sway_cursor_pointer {
+	struct sway_cursor *cursor;
+	struct wlr_pointer *wlr_pointer;
 
 	struct wl_listener hold_begin;
 	struct wl_listener hold_end;
@@ -43,43 +73,44 @@ struct sway_cursor {
 	struct wl_listener swipe_begin;
 	struct wl_listener swipe_update;
 	struct wl_listener swipe_end;
-
 	struct wl_listener motion;
 	struct wl_listener motion_absolute;
 	struct wl_listener button;
 	struct wl_listener axis;
 	struct wl_listener frame;
 
-	struct wl_listener touch_down;
-	struct wl_listener touch_up;
-	struct wl_listener touch_cancel;
-	struct wl_listener touch_motion;
-	struct wl_listener touch_frame;
-	bool simulating_pointer_from_touch;
-	bool pointer_touch_up;
-	int32_t pointer_touch_id;
+	struct wl_listener destroy;
+
+	struct sway_cursor_constraints constraints;
+};
+
+struct sway_cursor_touch {
+	struct sway_cursor *cursor;
+	struct wlr_touch *wlr_touch;
+
+	struct wl_listener down;
+	struct wl_listener up;
+	struct wl_listener motion;
+	struct wl_listener frame;
+	struct wl_listener cancel;
+
+	struct wl_listener destroy;
+
+	struct sway_cursor_constraints constraints;
+};
+
+struct sway_cursor_tablet {
+	struct sway_cursor *cursor;
+	struct wlr_tablet *wlr_tablet;
 
 	struct wl_listener tool_axis;
 	struct wl_listener tool_tip;
 	struct wl_listener tool_proximity;
 	struct wl_listener tool_button;
-	bool simulating_pointer_from_tool_tip;
-	bool simulating_pointer_from_tool_button;
-	uint32_t tool_buttons;
 
-	struct wl_listener request_set_cursor;
-	struct wl_listener image_surface_destroy;
+	struct wl_listener destroy;
 
-	struct wl_listener constraint_commit;
-
-	struct wl_event_source *hide_source;
-	bool hidden;
-	// This field is just a cache of the field in seat_config in order to avoid
-	// costly seat_config lookups on every keypress. HIDE_WHEN_TYPING_DEFAULT
-	// indicates that there is no cached value.
-	enum seat_config_hide_cursor_when_typing hide_when_typing;
-
-	size_t pressed_button_count;
+	struct sway_cursor_constraints constraints;
 };
 
 struct sway_node;
@@ -90,6 +121,13 @@ struct sway_node *node_at_coords(
 
 void sway_cursor_destroy(struct sway_cursor *cursor);
 struct sway_cursor *sway_cursor_create(struct sway_seat *seat);
+
+void sway_cursor_move(struct sway_cursor *cursor, double delta_x, double delta_y);
+void sway_cursor_warp(struct sway_cursor *cursor, double x, double y);
+
+struct sway_cursor_pointer *sway_cursor_pointer_create(struct sway_cursor *cursor, struct wlr_pointer *pointer);
+struct sway_cursor_tablet *sway_cursor_tablet_create(struct sway_cursor *cursor, struct wlr_tablet *tablet);
+struct sway_cursor_touch *sway_cursor_touch_create(struct sway_cursor *cursor, struct wlr_touch *touch);
 
 /**
  * "Rebase" a cursor on top of whatever view is underneath it.

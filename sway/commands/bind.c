@@ -4,7 +4,6 @@
 #include <strings.h>
 #include <xkbcommon/xkbcommon.h>
 #include <xkbcommon/xkbcommon-names.h>
-#include <wlr/types/wlr_cursor.h>
 #include "sway/commands.h"
 #include "sway/config.h"
 #include "sway/desktop/transaction.h"
@@ -622,7 +621,7 @@ void seat_execute_command(struct sway_seat *seat, struct sway_binding *binding) 
 		struct wlr_surface *surface = NULL;
 		double sx, sy;
 		struct sway_node *node = node_at_coords(seat,
-				seat->cursor->cursor->x, seat->cursor->cursor->y,
+				seat->cursor->x, seat->cursor->y,
 				&surface, &sx, &sy);
 		if (node && node->type == N_CONTAINER) {
 			con = node->sway_container;
