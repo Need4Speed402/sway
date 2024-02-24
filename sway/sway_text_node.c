@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <wlr/types/wlr_buffer.h>
+#include <wlr/types/wlr_raster.h>
 #include <wlr/interfaces/wlr_buffer.h>
 #include "cairo_util.h"
 #include "log.h"
@@ -54,6 +55,7 @@ struct text_buffer {
 
 	struct wl_listener outputs_update;
 	struct wl_listener destroy;
+	struct wl_listener invalidated;
 };
 
 static int get_text_width(struct sway_text_node *props) {
@@ -75,6 +77,13 @@ static void update_source_box(struct text_buffer *buffer) {
 
 	wlr_scene_buffer_set_source_box(buffer->buffer_node, &source_box);
 }
+
+static void render_backing_buffer(struct text_buffer *buffer);
+
+static void handle_invalidated(struct wl_listener *listener, void *data) {
+	struct text_buffer *buffer = wl_container_of(listener, buffer, invalidated);
+	render_backing_buffer(buffer);
+};
 
 static void render_backing_buffer(struct text_buffer *buffer) {
 	if (!buffer->visible) {
@@ -145,7 +154,17 @@ static void render_backing_buffer(struct text_buffer *buffer) {
 	cairo_buffer->surface = surface;
 	cairo_buffer->cairo = cairo;
 
+	wl_list_remove(&buffer->invalidated.link);
+
 	wlr_scene_buffer_set_buffer(buffer->buffer_node, &cairo_buffer->base);
+
+	if (buffer->buffer_node->raster) {
+		buffer->invalidated.notify = handle_invalidated;
+		wl_signal_add(&buffer->buffer_node->raster->events.invalidated, &buffer->invalidated);
+	} else {
+		wl_list_init(&buffer->invalidated.link);
+	}
+
 	wlr_buffer_drop(&cairo_buffer->base);
 	update_source_box(buffer);
 
@@ -203,6 +222,7 @@ static void handle_destroy(struct wl_listener *listener, void *data) {
 
 	wl_list_remove(&buffer->outputs_update.link);
 	wl_list_remove(&buffer->destroy.link);
+	wl_list_remove(&buffer->invalidated.link);
 
 	free(buffer->text);
 	free(buffer);
@@ -257,6 +277,8 @@ struct sway_text_node *sway_text_node_create(struct wlr_scene_tree *parent,
 	wl_signal_add(&node->node.events.destroy, &buffer->destroy);
 	buffer->outputs_update.notify = handle_outputs_update;
 	wl_signal_add(&node->events.outputs_update, &buffer->outputs_update);
+
+	wl_list_init(&buffer->invalidated.link);
 
 	text_calc_size(buffer);
 
