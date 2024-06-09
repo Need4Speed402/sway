@@ -128,6 +128,7 @@ static const struct cmd_handler command_handlers[] = {
 	{ "opacity", cmd_opacity },
 	{ "reload", cmd_reload },
 	{ "rename", cmd_rename },
+	{ "reset_context", cmd_reset_context },
 	{ "resize", cmd_resize },
 	{ "scratchpad", cmd_scratchpad },
 	{ "shortcuts_inhibitor", cmd_shortcuts_inhibitor },
