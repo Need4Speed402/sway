@@ -38,14 +38,8 @@ static uint32_t get_current_time_msec(void) {
 	return now.tv_sec * 1000 + now.tv_nsec / 1000000;
 }
 
-/**
- * Returns the node at the cursor's position. If there is a surface at that
- * location, it is stored in **surface (it may not be a view).
- */
-struct sway_node *node_at_coords(double lx, double ly,
-		struct wlr_surface **surface, double *sx, double *sy) {
-	struct wlr_scene_node *scene_node = NULL;
-
+struct wlr_scene_node *scene_node_at_coords(
+		double lx, double ly, double *sx, double *sy) {
 	struct wlr_scene_node *node;
 	wl_list_for_each_reverse(node, &root->layer_tree->children, link) {
 		struct wlr_scene_tree *layer = wlr_scene_tree_from_node(node);
@@ -56,28 +50,37 @@ struct sway_node *node_at_coords(double lx, double ly,
 			continue;
 		}
 
-		scene_node = wlr_scene_node_at(&layer->node, lx, ly, sx, sy);
-		if (scene_node) {
-			break;
+		struct wlr_scene_node *node = wlr_scene_node_at(&layer->node, lx, ly, sx, sy);
+		if (node) {
+			return node;
 		}
 	}
 
-	if (scene_node) {
-		// determine what wlr_surface we clicked on
-		if (scene_node->type == WLR_SCENE_NODE_BUFFER) {
-			struct wlr_scene_buffer *scene_buffer =
-				wlr_scene_buffer_from_node(scene_node);
-			struct wlr_scene_surface *scene_surface =
-				wlr_scene_surface_try_from_buffer(scene_buffer);
+	return NULL;
+}
 
-			if (scene_surface) {
-				*surface = scene_surface->surface;
-			}
-		}
+struct wlr_surface *surface_try_from_scene_node(struct wlr_scene_node *node) {
+	if (!node || node->type != WLR_SCENE_NODE_BUFFER) {
+		return NULL;
+	}
 
+	struct wlr_scene_buffer *scene_buffer =
+		wlr_scene_buffer_from_node(node);
+	struct wlr_scene_surface *scene_surface =
+		wlr_scene_surface_try_from_buffer(scene_buffer);
+
+	if (scene_surface) {
+		return scene_surface->surface;
+	}
+
+	return NULL;
+}
+
+struct sway_node *sway_node_try_from_scene_node(struct wlr_scene_node *node,
+		double lx, double ly) {
+	if (node) {
 		struct sway_container *con =
-			scene_descriptor_find(scene_node, SWAY_SCENE_DESC_CONTAINER);
-
+			scene_descriptor_find(node, SWAY_SCENE_DESC_CONTAINER);
 		if (con) {
 			// If this condition succeeds, the container is currently in the
 			// process of being destroyed. In this case, ignore the container
@@ -90,12 +93,12 @@ struct sway_node *node_at_coords(double lx, double ly,
 
 		// if we clicked on a layer shell or unmanaged xwayland we don't
 		// want to return the workspace node.
-		if (scene_descriptor_find(scene_node, SWAY_SCENE_DESC_LAYER_SHELL)) {
+		if (scene_descriptor_find(node, SWAY_SCENE_DESC_LAYER_SHELL)) {
 			return NULL;
 		}
 
 #if WLR_HAS_XWAYLAND
-		if (scene_descriptor_find(scene_node, SWAY_SCENE_DESC_XWAYLAND_UNMANAGED)) {
+		if (scene_descriptor_find(node, SWAY_SCENE_DESC_XWAYLAND_UNMANAGED)) {
 			return NULL;
 		}
 #endif
@@ -120,6 +123,18 @@ struct sway_node *node_at_coords(double lx, double ly,
 	}
 
 	return &ws->node;
+}
+
+/**
+ * Returns the node at the cursor's position. If there is a surface at that
+ * location, it is stored in **surface (it may not be a view).
+ */
+struct sway_node *node_at_coords(double lx, double ly,
+		struct wlr_surface **surface, double *sx, double *sy) {
+	struct wlr_scene_node *scene_node = scene_node_at_coords(lx, ly, sx, sy);
+	*surface = surface_try_from_scene_node(scene_node);
+
+	return sway_node_try_from_scene_node(scene_node, lx, ly);
 }
 
 void cursor_rebase(struct sway_cursor *cursor) {
