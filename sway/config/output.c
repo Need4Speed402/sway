@@ -78,6 +78,7 @@ struct output_config *new_output_config(const char *name) {
 	oc->color_transform = NULL;
 	oc->power = -1;
 	oc->allow_tearing = -1;
+	oc->margin.top = -1;
 	return oc;
 }
 
@@ -217,6 +218,9 @@ static void merge_output_config(struct output_config *dst, struct output_config 
 	}
 	if (src->allow_tearing != -1) {
 		dst->allow_tearing = src->allow_tearing;
+	}
+	if (src->margin.top != -1) {
+		dst->margin = src->margin;
 	}
 }
 
