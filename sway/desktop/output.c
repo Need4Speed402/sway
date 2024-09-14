@@ -505,8 +505,7 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 		return;
 	}
 
-	if (!wlr_output_init_render(wlr_output, server->allocator,
-			server->renderer)) {
+	if (!wlr_output_manager_init_output(&server->output_manager, wlr_output)) {
 		sway_log(SWAY_ERROR, "Failed to init output render");
 		return;
 	}

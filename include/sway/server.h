@@ -2,6 +2,7 @@
 #define _SWAY_SERVER_H
 #include <stdbool.h>
 #include <wayland-server-core.h>
+#include <wlr/types/wlr_output_manager.h>
 #include "config.h"
 #include "list.h"
 #include "sway/desktop/idle_inhibit_v1.h"
@@ -31,10 +32,9 @@ struct sway_server {
 
 	struct wlr_backend *backend;
 	struct wlr_session *session;
+	struct wlr_output_manager output_manager;
 	// secondary headless backend used for creating virtual outputs on-the-fly
 	struct wlr_backend *headless_backend;
-	struct wlr_renderer *renderer;
-	struct wlr_allocator *allocator;
 
 	struct wlr_compositor *compositor;
 

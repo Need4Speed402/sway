@@ -176,45 +176,6 @@ static void detect_proprietary(struct wlr_backend *backend, void *data) {
 	drmFreeVersion(version);
 }
 
-static void handle_renderer_lost(struct wl_listener *listener, void *data) {
-	struct sway_server *server = wl_container_of(listener, server, renderer_lost);
-
-	sway_log(SWAY_INFO, "Re-creating renderer after GPU reset");
-
-	struct wlr_renderer *renderer = wlr_renderer_autocreate(server->backend);
-	if (renderer == NULL) {
-		sway_log(SWAY_ERROR, "Unable to create renderer");
-		return;
-	}
-
-	struct wlr_allocator *allocator =
-		wlr_allocator_autocreate(server->backend, renderer);
-	if (allocator == NULL) {
-		sway_log(SWAY_ERROR, "Unable to create allocator");
-		wlr_renderer_destroy(renderer);
-		return;
-	}
-
-	struct wlr_renderer *old_renderer = server->renderer;
-	struct wlr_allocator *old_allocator = server->allocator;
-	server->renderer = renderer;
-	server->allocator = allocator;
-
-	wl_list_remove(&server->renderer_lost.link);
-	wl_signal_add(&server->renderer->events.lost, &server->renderer_lost);
-
-	wlr_compositor_set_renderer(server->compositor, renderer);
-
-	struct sway_output *output;
-	wl_list_for_each(output, &root->all_outputs, link) {
-		wlr_output_init_render(output->wlr_output,
-			server->allocator, server->renderer);
-	}
-
-	wlr_allocator_destroy(old_allocator);
-	wlr_renderer_destroy(old_renderer);
-}
-
 bool server_init(struct sway_server *server) {
 	sway_log(SWAY_DEBUG, "Initializing Wayland server");
 	server->wl_display = wl_display_create();
@@ -232,40 +193,26 @@ bool server_init(struct sway_server *server) {
 
 	wlr_multi_for_each_backend(server->backend, detect_proprietary, NULL);
 
-	server->renderer = wlr_renderer_autocreate(server->backend);
-	if (!server->renderer) {
-		sway_log(SWAY_ERROR, "Failed to create renderer");
-		return false;
-	}
+	wlr_output_manager_init(&server->output_manager, server->backend);
+	wlr_output_manager_init_wl_shm(&server->output_manager, server->wl_display);
 
-	server->renderer_lost.notify = handle_renderer_lost;
-	wl_signal_add(&server->renderer->events.lost, &server->renderer_lost);
-
-	wlr_renderer_init_wl_shm(server->renderer, server->wl_display);
-
-	if (wlr_renderer_get_texture_formats(server->renderer, WLR_BUFFER_CAP_DMABUF) != NULL) {
-		server->linux_dmabuf_v1 = wlr_linux_dmabuf_v1_create_with_renderer(
-			server->wl_display, 4, server->renderer);
+	struct wlr_renderer *renderer = server->output_manager.primary.renderer;
+	if (wlr_renderer_get_texture_formats(renderer, WLR_BUFFER_CAP_DMABUF) != NULL) {
+		server->linux_dmabuf_v1 =
+			wlr_linux_dmabuf_v1_create_with_renderer(server->wl_display, 4, renderer);
 		if (debug.legacy_wl_drm) {
-			wlr_drm_create(server->wl_display, server->renderer);
+			wlr_drm_create(server->wl_display, renderer);
 		}
 	}
-	if (wlr_renderer_get_drm_fd(server->renderer) >= 0 &&
-			server->renderer->features.timeline &&
+
+	if (wlr_renderer_get_drm_fd(renderer) >= 0 &&
+			renderer->features.timeline &&
 			server->backend->features.timeline) {
 		wlr_linux_drm_syncobj_manager_v1_create(server->wl_display, 1,
-			wlr_renderer_get_drm_fd(server->renderer));
+			wlr_renderer_get_drm_fd(renderer));
 	}
 
-	server->allocator = wlr_allocator_autocreate(server->backend,
-		server->renderer);
-	if (!server->allocator) {
-		sway_log(SWAY_ERROR, "Failed to create allocator");
-		return false;
-	}
-
-	server->compositor = wlr_compositor_create(server->wl_display, 6,
-		server->renderer);
+	server->compositor = wlr_compositor_create(server->wl_display, 6, NULL);
 
 	wlr_subcompositor_create(server->wl_display);
 
