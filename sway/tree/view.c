@@ -1156,7 +1156,7 @@ static void view_save_buffer_iterator(struct wlr_scene_buffer *buffer,
 	wlr_scene_buffer_set_source_box(sbuf, &buffer->src_box);
 	wlr_scene_node_set_position(&sbuf->node, sx, sy);
 	wlr_scene_buffer_set_transform(sbuf, buffer->transform);
-	wlr_scene_buffer_set_buffer(sbuf, buffer->buffer);
+	wlr_scene_buffer_set_raster_with_damage(sbuf, buffer->raster, NULL);
 }
 
 void view_save_buffer(struct sway_view *view) {

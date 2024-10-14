@@ -10,7 +10,7 @@
 #include <wlr/types/wlr_buffer.h>
 #include <wlr/types/wlr_alpha_modifier_v1.h>
 #include <wlr/types/wlr_gamma_control_v1.h>
-#include <wlr/types/wlr_matrix.h>
+#include <wlr/types/wlr_raster.h>
 #include <wlr/types/wlr_output_layout.h>
 #include <wlr/types/wlr_output_management_v1.h>
 #include <wlr/types/wlr_output_power_management_v1.h>
@@ -187,9 +187,9 @@ static void send_frame_done_iterator(struct wlr_scene_buffer *buffer,
 static enum wlr_scale_filter_mode get_scale_filter(struct sway_output *output,
 		struct wlr_scene_buffer *buffer) {
 	// if we are scaling down, we should always choose linear
-	if (buffer->dst_width > 0 && buffer->dst_height > 0 && (
-			buffer->dst_width < buffer->buffer_width ||
-			buffer->dst_height < buffer->buffer_height)) {
+	if (buffer->dst_width > 0 && buffer->dst_height > 0 && buffer->raster && (
+			buffer->dst_width < (int)buffer->raster->width ||
+			buffer->dst_height < (int)buffer->raster->height)) {
 		return WLR_SCALE_FILTER_BILINEAR;
 	}
 
