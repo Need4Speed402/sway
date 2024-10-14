@@ -203,6 +203,11 @@ bool server_init(struct sway_server *server) {
 		if (debug.legacy_wl_drm) {
 			wlr_drm_create(server->wl_display, renderer);
 		}
+
+		if (server->linux_dmabuf_v1) {
+			wlr_linux_dmabuf_v1_set_main_blit_device(server->linux_dmabuf_v1, renderer,
+				server->output_manager.primary.allocator);
+		}
 	}
 
 	if (wlr_renderer_get_drm_fd(renderer) >= 0 &&
